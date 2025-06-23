@@ -1,86 +1,144 @@
-//
-//  ContentView.swift
-//  EmoFlow
-//
-//  Created by 杨振涛 on 2025/6/19.
-//
-
 import SwiftUI
-import CoreData
+import UIKit
 
 struct ContentView: View {
-    @Environment(\.managedObjectContext) private var viewContext
+    @State private var selectedEmotion: EmotionType? = nil
+    @State private var showChatSheet = false
+    @State private var didTrigger = false
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
-        animation: .default)
-    private var items: FetchedResults<Item>
+    @State private var fillOpacity: Double = 0
+    @State private var heartScale: CGFloat = 1
+
+    // 震动
+    private let heavyFeedback = UIImpactFeedbackGenerator(style: .heavy)
+    @State private var feedbackTimer: Timer?
+    @State private var vibrationInterval: Double = 0
+
+    // 心形动画
+    @State private var scaleFillTimer: Timer?
+    @State private var animationStart: Date?
+
+    private let pressDuration: Double = 5.0
 
     var body: some View {
-        NavigationView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp!, formatter: itemFormatter)")
-                    } label: {
-                        Text(item.timestamp!, formatter: itemFormatter)
+        NavigationStack {
+            VStack {
+                Text(greeting)
+                    .font(.title3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading).padding(.top, 8)
+                Spacer()
+
+                // 心形
+                ZStack {
+                    HeartShape()
+                        .stroke(selectedEmotion?.color ?? .green, lineWidth: 3)
+                        .frame(width: 200, height: 180)
+                        .scaleEffect(heartScale)
+                    HeartShape()
+                        .fill(selectedEmotion?.color ?? .clear)
+                        .frame(width: 200, height: 180)
+                        .opacity(fillOpacity)
+                        .scaleEffect(heartScale)
+                }
+                Spacer()
+
+                // 情绪气泡
+                HStack(spacing: 20) {
+                    ForEach(EmotionType.allCases, id: \.self) { emotion in
+                        EmotionBubble(emotion: emotion)
+                            .opacity(selectedEmotion == nil ? 1 : 0.4)
+                            .disabled(selectedEmotion != nil)
+                            .onLongPressGesture(
+                                minimumDuration: pressDuration,
+                                pressing: { pressing in
+                                    if pressing && !didTrigger {
+                                        // 开始长按
+                                        didTrigger = false
+                                        selectedEmotion = emotion
+                                        startVibration()
+                                        startHeartAnimation()
+                                    } else if !pressing && !didTrigger {
+                                        // 中途松手
+                                        didTrigger = true
+                                        stopAll()
+                                        showChatSheet = true
+                                    }
+                                },
+                                perform: {
+                                    // 持续满 5 秒
+                                    if !didTrigger {
+                                        didTrigger = true
+                                        stopAll()
+                                        showChatSheet = true
+                                    }
+                                }
+                            )
                     }
                 }
-                .onDelete(perform: deleteItems)
+                .padding(.bottom, 30)
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-            Text("Select an item")
-        }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+            .padding()
+            .onAppear(perform: resetState)
+            .sheet(isPresented: $showChatSheet, onDismiss: resetState) {
+                ChatView(emotions: [selectedEmotion ?? .happy])
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
     }
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            offsets.map { items[$0] }.forEach(viewContext.delete)
+    private func startVibration() {
+        feedbackTimer?.invalidate()
+        vibrationInterval = pressDuration / 8
+        heavyFeedback.prepare()
+        scheduleVibration()
+    }
 
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-            }
+    private func scheduleVibration() {
+        guard !didTrigger else { return }
+        heavyFeedback.impactOccurred()
+        let next = max(0.05, vibrationInterval * 0.7)
+        vibrationInterval = next
+        feedbackTimer = Timer.scheduledTimer(withTimeInterval: next, repeats: false) { _ in
+            scheduleVibration()
         }
     }
-}
 
-private let itemFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    formatter.timeStyle = .medium
-    return formatter
-}()
+    private func startHeartAnimation() {
+        animationStart = Date()
+        scaleFillTimer?.invalidate()
+        scaleFillTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { timer in
+            guard !didTrigger, let start = animationStart else {
+                timer.invalidate()
+                return
+            }
+            let progress = min(Date().timeIntervalSince(start) / pressDuration, 1)
+            heartScale = 1 + CGFloat(progress)
+            fillOpacity = progress
+            if progress >= 1 { timer.invalidate() }
+        }
+    }
 
-#Preview {
-    ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+    private func stopAll() {
+        feedbackTimer?.invalidate()
+        scaleFillTimer?.invalidate()
+    }
+
+    private func resetState() {
+        selectedEmotion = nil
+        fillOpacity     = 0
+        heartScale      = 1
+        didTrigger      = false
+        stopAll()
+    }
+
+    private var greeting: String {
+        let h = Calendar.current.component(.hour, from: Date())
+        switch h {
+        case 5..<12: return "上午好，现在心情咋样呀？"
+        case 12..<18: return "下午好，现在心情咋样呀？"
+        default:     return "晚上好，现在心情咋样呀？"
+        }
+    }
 }
