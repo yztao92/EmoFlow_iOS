@@ -3,7 +3,18 @@ import SwiftUI
 struct ChatView: View {
     let emotions: [EmotionType]
 
-    /// 用户气泡色：取第一个情绪的颜色
+    // 用户头像：Asset 里的图片名
+    private var userEmojiImageName: String {
+        guard let emo = emotions.first else { return "EmojiHappy" }
+        switch emo {
+        case .happy: return "EmojiHappy"
+        case .tired: return "EmojiTired"
+        case .sad:   return "EmojiSad"
+        case .angry: return "EmojiAngry"
+        }
+    }
+
+    // 用户气泡色：取第一个情绪的颜色
     private var userBubbleColor: Color {
         emotions.first?.color ?? .blue
     }
@@ -17,21 +28,22 @@ struct ChatView: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    // 顶部留白，避免被 sheet 把手或导航栏顶住
-                    Color.clear
-                        .frame(height: 32)
+                    Color.clear.frame(height: 32)
 
-                    // 真正的消息列表
                     ChatMessagesView(
                         messages: messages,
                         isLoading: isLoading,
-                        userBubbleColor: userBubbleColor
+                        userBubbleColor: userBubbleColor,
+                        userEmojiImageName: userEmojiImageName,
+                        aiAvatarImageName: "AIicon" // 这里是 AI 头像 Asset 名称
                     )
                 }
-                // iOS 17+ 零参 onChange 版本
                 .onChange(of: messages.count) {
-                    withAnimation {
-                        proxy.scrollTo(messages.last?.id, anchor: .bottom)
+                    guard let lastId = messages.last?.id else { return }
+                    DispatchQueue.main.async {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            proxy.scrollTo(lastId, anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -53,6 +65,12 @@ struct ChatView: View {
         .navigationTitle("情绪对话")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            // 多次尝试聚焦，兼容真机 sheet 场景
+            for i in 1...5 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
+                    isInputFocused = true
+                }
+            }
             Task { await loadOpeningMessage() }
         }
     }

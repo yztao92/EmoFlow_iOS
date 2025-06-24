@@ -2,47 +2,37 @@ import SwiftUI
 
 struct EmotionBubble: View {
     let emotion: EmotionType
-    @State private var isDragging = false
-    @State private var isDropped = false
+    @State private var isDragging = false  // 只用来触发放大动画
+    @State private var isDropped  = false  // 只用来触发消失动画（如果你还想要的话）
 
-    var emoji: String {
+    private var imageName: String {
         switch emotion {
-        case .angry: return "😡"
-        case .sad: return "😢"
-        case .tired: return "😩"
-        case .happy: return "😊"
-        }
-    }
-
-    var background: Color {
-        switch emotion {
-        case .angry: return .red
-        case .sad: return .blue
-        case .tired: return .gray
-        case .happy: return .yellow
+        case .happy: return "EmojiHappy"
+        case .tired: return "EmojiTired"
+        case .sad:   return "EmojiSad"
+        case .angry: return "EmojiAngry"
         }
     }
 
     var body: some View {
-        Text(emoji)
-            .font(.system(size: 36))
-            .padding(20)
-            .background(emotion.color)
-            .clipShape(Circle())
-            .scaleEffect(isDropped ? 0.0 : (isDragging ? 1.2 : 1.0))
+        Image(imageName)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 64, height: 64)
+            .scaleEffect(isDropped ? 0 : (isDragging ? 1.2 : 1.0))
             .shadow(radius: isDragging ? 6 : 3)
             .animation(.spring(response: 0.4, dampingFraction: 0.5), value: isDragging)
             .opacity(isDropped ? 0 : 1)
-            .onDrag {
-                isDragging = true
-                return NSItemProvider(object: emotion.rawValue as NSString)
-            }
-            .onDrop(of: [.text], isTargeted: nil) { _ in
-                withAnimation {
-                    isDropped = true
-                    isDragging = false
-                }
-                return true
-            }
+            // 不再 onDrag/onDrop
+    }
+
+    /// 公开两个方法，让外部 ContentView 来驱动动画
+    func pressBegin() {
+        isDragging = true
+    }
+
+    func pressEnd() {
+        isDragging = false
+        isDropped  = true
     }
 }
