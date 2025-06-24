@@ -142,19 +142,49 @@ struct ChatView: View {
 
     private func saveCurrentChat() {
         guard !messages.isEmpty else { return }
-        let summary = messages.first?.content ?? "新会话"
-        let newRecord = ChatRecord(
-            id: UUID(),
-            date: Date(),
-            messages: messages,
-            summary: summary,
-            emotion: emotions.first ?? .happy  // ✅ 传入情绪类型
-        )
-        chatRecords.append(newRecord)
-        RecordManager.saveAll(chatRecords)
 
-        // ✅ 核心逻辑：关闭弹窗 + 切换 Tab
-        showChatSheet = false
-        selectedTab = 1
+        let emotion = emotions.first ?? .happy
+
+        // ✅ 异步生成心情日记（替代默认摘要）
+        Task {
+            do {
+                let journal = try await JournalService.shared.generateJournal(
+                    emotions: [emotion],
+                    messages: messages.map {
+                        ChatMessageDTO(role: $0.role.rawValue, content: $0.content)
+                    }
+                )
+                print("📓 AI 生成的心情日记：\n\(journal)")
+
+                let newRecord = ChatRecord(
+                    id: UUID(),
+                    date: Date(),
+                    messages: messages,
+                    summary: journal,  // 用 AI 生成的摘要
+                    emotion: emotion
+                )
+                chatRecords.append(newRecord)
+                RecordManager.saveAll(chatRecords)
+
+            } catch {
+                print("❌ 生成心情日记失败: \(error)")
+
+                // 失败时仍然存储原始摘要
+                let fallbackSummary = messages.first?.content ?? "新会话"
+                let fallbackRecord = ChatRecord(
+                    id: UUID(),
+                    date: Date(),
+                    messages: messages,
+                    summary: fallbackSummary,
+                    emotion: emotion
+                )
+                chatRecords.append(fallbackRecord)
+                RecordManager.saveAll(chatRecords)
+            }
+
+            // ✅ 不论成功失败都关闭弹窗并跳转
+            showChatSheet = false
+            selectedTab = 1
+        }
     }
 }

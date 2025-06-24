@@ -13,25 +13,39 @@ struct ChatHistoryView: View {
 
     var body: some View {
         NavigationStack {
-            List(records.sorted(by: { $0.date > $1.date })) { record in
-                Button {
-                    selectedRecord = record
-                } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Image(record.safeEmotion.iconName)
-                                .resizable()
-                                .frame(width: 20, height: 20)
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(records.sorted(by: { $0.date > $1.date })) { record in
+                        Button {
+                            selectedRecord = record
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 8) {
+                                    Image(record.safeEmotion.iconName)
+                                        .resizable()
+                                        .frame(width: 20, height: 20)
 
-                            Text(record.summary)
-                                .font(.headline)
+                                    Text(record.date.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+
+                                    Spacer()
+                                }
+
+                                Text(record.summary)
+                                    .font(.body)
+                                    .foregroundColor(.primary)
+                                    .lineLimit(4)
+                            }
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .cornerRadius(12)
                         }
-
-                        Text(record.date.formatted(date: .abbreviated, time: .standard))
-                            .foregroundColor(.gray)
-                            .font(.subheadline)
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.horizontal)
                     }
                 }
+                .padding(.vertical)
             }
             .navigationTitle("记录")
             .sheet(item: $selectedRecord) { record in
@@ -41,29 +55,5 @@ struct ChatHistoryView: View {
                 records = RecordManager.loadAll()
             }
         }
-    }
-}
-
-struct ChatRecordDetailView: View {
-    let record: ChatRecord
-
-    var body: some View {
-        VStack(alignment: .leading) {
-            Text(record.summary)
-                .font(.title2)
-                .padding(.bottom)
-            ScrollView {
-                ForEach(record.messages) { msg in
-                    HStack(alignment: .top) {
-                        Text(msg.role == .user ? "我:" : "AI:")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                        Text(msg.content)
-                            .padding(.vertical, 8)
-                    }
-                }
-            }
-        }
-        .padding()
     }
 }
