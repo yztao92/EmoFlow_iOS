@@ -2,8 +2,9 @@ import SwiftUI
 
 struct ChatView: View {
     let emotions: [EmotionType]
+    @Binding var selectedTab: Int  // ✅ 当前选中 Tab 索引
+    @Binding var showChatSheet: Bool   // ✅ 新增这一行
 
-    // 用户头像：Asset 里的图片名
     private var userEmojiImageName: String {
         guard let emo = emotions.first else { return "EmojiHappy" }
         switch emo {
@@ -14,7 +15,6 @@ struct ChatView: View {
         }
     }
 
-    // 用户气泡色：取第一个情绪的颜色
     private var userBubbleColor: Color {
         emotions.first?.color ?? .blue
     }
@@ -23,6 +23,9 @@ struct ChatView: View {
     @State private var inputText: String = ""
     @State private var isLoading = false
     @FocusState private var isInputFocused: Bool
+
+    @State private var showSavedAlert = false
+    @State private var chatRecords: [ChatRecord] = RecordManager.loadAll()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,7 +38,7 @@ struct ChatView: View {
                         isLoading: isLoading,
                         userBubbleColor: userBubbleColor,
                         userEmojiImageName: userEmojiImageName,
-                        aiAvatarImageName: "AIicon" // 这里是 AI 头像 Asset 名称
+                        aiAvatarImageName: "AIicon"
                     )
                 }
                 .onChange(of: messages.count) {
@@ -50,7 +53,13 @@ struct ChatView: View {
 
             Divider()
 
-            HStack {
+            HStack(spacing: 8) {
+                // ✅ 存档按钮
+                Button(action: saveCurrentChat) {
+                    Image(systemName: "archivebox")
+                        .foregroundColor(.blue)
+                }
+
                 TextField("说点什么...", text: $inputText)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .focused($isInputFocused)
@@ -64,8 +73,14 @@ struct ChatView: View {
         }
         .navigationTitle("情绪对话")
         .navigationBarTitleDisplayMode(.inline)
+        .alert(isPresented: $showSavedAlert) {
+            Alert(
+                title: Text("已存档"),
+                message: Text("本次聊天内容已保存到记录页"),
+                dismissButton: .default(Text("好的"))
+            )
+        }
         .onAppear {
-            // 多次尝试聚焦，兼容真机 sheet 场景
             for i in 1...5 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
                     isInputFocused = true
@@ -98,8 +113,7 @@ struct ChatView: View {
         guard !trimmed.isEmpty else { return }
 
         if trimmed.lowercased().hasPrefix("user:") || trimmed.lowercased().hasPrefix("assistant:") {
-            messages.append(.init(role: .assistant,
-                                  content: "嘿，我们不用加 'user:' 或 'assistant:'，直接说出你的想法就好～"))
+            messages.append(.init(role: .assistant, content: "嘿，我们不用加 'user:' 或 'assistant:'，直接说出你的想法就好～"))
             inputText = ""
             return
         }
@@ -124,5 +138,23 @@ struct ChatView: View {
             }
             isLoading = false
         }
+    }
+
+    private func saveCurrentChat() {
+        guard !messages.isEmpty else { return }
+        let summary = messages.first?.content ?? "新会话"
+        let newRecord = ChatRecord(
+            id: UUID(),
+            date: Date(),
+            messages: messages,
+            summary: summary,
+            emotion: emotions.first ?? .happy  // ✅ 传入情绪类型
+        )
+        chatRecords.append(newRecord)
+        RecordManager.saveAll(chatRecords)
+
+        // ✅ 核心逻辑：关闭弹窗 + 切换 Tab
+        showChatSheet = false
+        selectedTab = 1
     }
 }

@@ -1,28 +1,26 @@
 import SwiftUI
-import UIKit  // 用于触感反馈
+import UIKit
 
 struct ContentView: View {
+    @Binding var showChatSheet: Bool
+    @Binding var emotions: [EmotionType]
+
     @State private var selectedEmotion: EmotionType?
-    @State private var showChatSheet = false
+    @State private var triggeredEmotion: EmotionType?  // ✅ 用于最终触发
     @State private var isHolding = false
     @State private var didTrigger = false
 
     @State private var fillOpacity: Double = 0
     @State private var heartScale: CGFloat = 1.0
 
-    // 触感反馈
     private let heavyFeedback = UIImpactFeedbackGenerator(style: .heavy)
     @State private var feedbackTimer: Timer?
     @State private var vibrationInterval: Double = 0
 
-    // 心形动画
     @State private var scaleFillTimer: Timer?
     @State private var animationStart: Date?
 
-    // 长按阈值
     private let pressDuration: Double = 5.0
-
-    // 气泡顺序
     private let emotionOrder: [EmotionType] = [.happy, .tired, .sad, .angry]
 
     var body: some View {
@@ -35,7 +33,6 @@ struct ContentView: View {
 
                 Spacer()
 
-                // 心形
                 ZStack {
                     HeartShape()
                         .stroke(selectedEmotion?.color ?? .green, lineWidth: 3)
@@ -51,31 +48,27 @@ struct ContentView: View {
 
                 Spacer()
 
-                // 情绪气泡
                 HStack(spacing: 32) {
                     ForEach(emotionOrder, id: \.self) { emotion in
                         EmotionBubble(emotion: emotion)
-                            .opacity(selectedEmotion == nil ? 1 : 0.4)
-                            .allowsHitTesting(selectedEmotion == nil)
-                            // 1️⃣ 长按手势：负责“满时长”分支
+                            .opacity(selectedEmotion == nil || selectedEmotion == emotion ? 1 : 0.4)
+                            .allowsHitTesting(selectedEmotion == nil || selectedEmotion == emotion)
                             .gesture(
                                 LongPressGesture(minimumDuration: pressDuration)
                                     .onChanged { _ in
                                         guard !isHolding else { return }
                                         isHolding = true
                                         didTrigger = false
-                                        selectedEmotion = emotion
-                                        // 启动触感 & 心形动画
+                                        selectedEmotion = emotion     // ✅ 提前设置用于动画
+                                        triggeredEmotion = emotion    // ✅ 同时记录最终触发的情绪
                                         startVibration()
                                         startHeartAnimation()
                                     }
                                     .onEnded { _ in
-                                        // 满 5 秒后触发
                                         guard isHolding && !didTrigger else { return }
                                         triggerChat()
                                     }
                             )
-                            // 2️⃣ 拖拽手势：负责“中途松手”分支
                             .simultaneousGesture(
                                 DragGesture(minimumDistance: 0)
                                     .onEnded { _ in
@@ -89,19 +82,19 @@ struct ContentView: View {
             }
             .padding()
             .onAppear(perform: resetState)
-            .sheet(isPresented: $showChatSheet, onDismiss: resetState) {
-                ChatView(emotions: [selectedEmotion ?? .happy])
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+            .onChange(of: showChatSheet) { oldValue, newValue in
+                if newValue == false {
+                    resetState()  // ✅ 修复气泡禁用问题
+                }
             }
         }
     }
 
-    // MARK: 逻辑封装
     private func triggerChat() {
         didTrigger = true
         isHolding = false
         stopAll()
+        emotions = [triggeredEmotion ?? .happy]  // ✅ 用最终记录的情绪传递
         showChatSheet = true
     }
 
@@ -143,6 +136,7 @@ struct ContentView: View {
 
     private func resetState() {
         selectedEmotion = nil
+        triggeredEmotion = nil
         fillOpacity     = 0
         heartScale      = 1
         isHolding       = false
