@@ -1,5 +1,5 @@
 //
-//  Mainview.swift
+//  MainView.swift
 //  EmoFlow
 //
 //  Created by 杨振涛 on 2025/6/23.
@@ -14,39 +14,39 @@ struct MainView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            // 1. 情绪输入
+            // 1. 心情输入
             ContentView(showChatSheet: $showChatSheet, emotions: $emotions)
                 .tabItem {
-                    Label("心情输入", systemImage: "heart.fill")
+                    Image(selectedTab == 0 ? "tab_heart_selected" : "tab_heart_default")
                 }
                 .tag(0)
 
             // 2. 聊天记录
             ChatHistoryView()
                 .tabItem {
-                    Label("记录", systemImage: "book.fill")
+                    Image(selectedTab == 1 ? "tab_record_selected" : "tab_record_default")
                 }
                 .tag(1)
 
             // 3. 待办
             TodoView()
                 .tabItem {
-                    Label("待办", systemImage: "checkmark.circle.fill")
+                    Image(selectedTab == 2 ? "tab_todo_selected" : "tab_todo_default")
                 }
                 .tag(2)
 
             // 4. 设置
             SettingsView()
                 .tabItem {
-                    Label("设置", systemImage: "person.circle.fill")
+                    Image(selectedTab == 3 ? "tab_settings_selected" : "tab_settings_default")
                 }
                 .tag(3)
         }
         .sheet(isPresented: $showChatSheet) {
             ChatView(
-                emotions: emotions,
+                emotions: $emotions,          // ← 传入 Binding<[EmotionType]>
                 selectedTab: $selectedTab,
-                showChatSheet: $showChatSheet     // ✅ 必传
+                showChatSheet: $showChatSheet
             )
             .presentationDetents([.large])
         }

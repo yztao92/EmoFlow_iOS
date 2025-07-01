@@ -1,10 +1,11 @@
 import SwiftUI
 
 struct ChatView: View {
-    let emotions: [EmotionType]
-    @Binding var selectedTab: Int  // ✅ 当前选中 Tab 索引
-    @Binding var showChatSheet: Bool   // ✅ 新增这一行
+    @Binding var emotions: [EmotionType]
+    @Binding var selectedTab: Int      // 当前选中 Tab 索引
+    @Binding var showChatSheet: Bool   // 控制弹窗显示
 
+    // 用户头像表情
     private var userEmojiImageName: String {
         guard let emo = emotions.first else { return "EmojiHappy" }
         switch emo {
@@ -14,7 +15,7 @@ struct ChatView: View {
         case .angry: return "EmojiAngry"
         }
     }
-
+    // 用户消息气泡颜色
     private var userBubbleColor: Color {
         emotions.first?.color ?? .blue
     }
@@ -27,12 +28,13 @@ struct ChatView: View {
     @State private var showSavedAlert = false
     @State private var chatRecords: [ChatRecord] = RecordManager.loadAll()
 
+    @State private var didLoadOpening = false  // 是否已加载开场消息
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
                     Color.clear.frame(height: 32)
-
                     ChatMessagesView(
                         messages: messages,
                         isLoading: isLoading,
@@ -41,12 +43,12 @@ struct ChatView: View {
                         aiAvatarImageName: "AIicon"
                     )
                 }
-                .onChange(of: messages.count) {
-                    guard let lastId = messages.last?.id else { return }
-                    DispatchQueue.main.async {
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            proxy.scrollTo(lastId, anchor: .bottom)
-                        }
+                // 使用两参数 onChange，避免单参废弃警告
+                .onChange(of: messages.count) { oldCount, newCount in
+                    guard newCount > oldCount,
+                          let lastId = messages.last?.id else { return }
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        proxy.scrollTo(lastId, anchor: .bottom)
                     }
                 }
             }
@@ -54,44 +56,32 @@ struct ChatView: View {
             Divider()
 
             HStack(spacing: 8) {
-                // ✅ 存档按钮
                 Button(action: saveCurrentChat) {
-                    Image(systemName: "archivebox")
-                        .foregroundColor(.blue)
+                    Image(systemName: "archivebox").foregroundColor(.blue)
                 }
-
                 TextField("说点什么...", text: $inputText)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .focused($isInputFocused)
-
-                Button("发送") {
-                    send()
-                }
-                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button("发送") { send() }
+                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding()
         }
         .navigationTitle("情绪对话")
         .navigationBarTitleDisplayMode(.inline)
         .alert(isPresented: $showSavedAlert) {
-            Alert(
-                title: Text("已存档"),
-                message: Text("本次聊天内容已保存到记录页"),
-                dismissButton: .default(Text("好的"))
-            )
+            Alert(title: Text("已存档"),
+                  message: Text("本次聊天内容已保存到记录页"),
+                  dismissButton: .default(Text("好的")))
         }
-        .onAppear {
-            for i in 1...5 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.1) {
-                    isInputFocused = true
-                }
-            }
-            Task { await loadOpeningMessage() }
-        }
+        // 首次出现和 émotion 变化时加载开场提示
+        .onAppear { maybeLoadOpening() }
+        .onChange(of: emotions) { _, _ in maybeLoadOpening() }
     }
 
-    private func loadOpeningMessage() async {
-        isLoading = true
+    private func maybeLoadOpening() {
+        guard !didLoadOpening else { return }
+        didLoadOpening = true
         let mood = emotions.first ?? .happy
         let moodText: String
         switch mood {
@@ -104,20 +94,18 @@ struct ChatView: View {
         case .angry:
             moodText = "好像有点生气了？我可以陪你说说看～"
         }
-        messages.append(ChatMessage(role: .assistant, content: moodText))
-        isLoading = false
+        messages.append(.init(role: .assistant, content: moodText))
     }
 
     private func send() {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-
         if trimmed.lowercased().hasPrefix("user:") || trimmed.lowercased().hasPrefix("assistant:") {
-            messages.append(.init(role: .assistant, content: "嘿，我们不用加 'user:' 或 'assistant:'，直接说出你的想法就好～"))
+            messages.append(.init(role: .assistant,
+                                   content: "嘿，我们不用加 'user:' 或 'assistant:'，直接说出你的想法就好～"))
             inputText = ""
             return
         }
-
         let userMessage = ChatMessage(role: .user, content: trimmed)
         messages.append(userMessage)
         inputText = ""
@@ -128,9 +116,7 @@ struct ChatView: View {
             do {
                 let (answer, references) = try await ChatService.shared.sendMessage(
                     emotions: emotions,
-                    messages: messages.map {
-                        ChatMessageDTO(role: $0.role.rawValue, content: $0.content)
-                    }
+                    messages: messages.map { ChatMessageDTO(role: $0.role.rawValue, content: $0.content) }
                 )
                 messages.append(.init(role: .assistant, content: answer, references: references))
             } catch {
@@ -142,47 +128,24 @@ struct ChatView: View {
 
     private func saveCurrentChat() {
         guard !messages.isEmpty else { return }
-
         let emotion = emotions.first ?? .happy
-
-        // ✅ 异步生成心情日记（替代默认摘要）
         Task {
             do {
                 let journal = try await JournalService.shared.generateJournal(
                     emotions: [emotion],
-                    messages: messages.map {
-                        ChatMessageDTO(role: $0.role.rawValue, content: $0.content)
-                    }
+                    messages: messages.map { ChatMessageDTO(role: $0.role.rawValue, content: $0.content) }
                 )
                 print("📓 AI 生成的心情日记：\n\(journal)")
-
-                let newRecord = ChatRecord(
-                    id: UUID(),
-                    date: Date(),
-                    messages: messages,
-                    summary: journal,  // 用 AI 生成的摘要
-                    emotion: emotion
-                )
+                let newRecord = ChatRecord(id: UUID(), date: Date(), messages: messages, summary: journal, emotion: emotion)
                 chatRecords.append(newRecord)
                 RecordManager.saveAll(chatRecords)
-
             } catch {
                 print("❌ 生成心情日记失败: \(error)")
-
-                // 失败时仍然存储原始摘要
                 let fallbackSummary = messages.first?.content ?? "新会话"
-                let fallbackRecord = ChatRecord(
-                    id: UUID(),
-                    date: Date(),
-                    messages: messages,
-                    summary: fallbackSummary,
-                    emotion: emotion
-                )
+                let fallbackRecord = ChatRecord(id: UUID(), date: Date(), messages: messages, summary: fallbackSummary, emotion: emotion)
                 chatRecords.append(fallbackRecord)
                 RecordManager.saveAll(chatRecords)
             }
-
-            // ✅ 不论成功失败都关闭弹窗并跳转
             showChatSheet = false
             selectedTab = 1
         }

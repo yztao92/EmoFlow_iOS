@@ -1,10 +1,4 @@
-//
-//  RecordManager.swift
-//  EmoFlow
-//
-//  Created by 杨振涛 on 2025/6/24.
-//
-
+// RecordManager.swift
 import Foundation
 
 struct RecordManager {
@@ -16,31 +10,21 @@ struct RecordManager {
         }
     }
 
-    static func save(messages: [ChatMessage], emotions: [EmotionType]) {
-        guard let first = messages.first else { return }
+    static func loadAll() -> [ChatRecord] {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let records = try? JSONDecoder().decode([ChatRecord].self, from: data)
+        else {
+            return []
+        }
+        return records
+    }
 
-        let record = ChatRecord(
-            id: UUID(),
-            date: Date(),
-            messages: messages,
-            summary: first.content,
-            emotion: emotions.first ?? .happy  // ✅ 新增字段
-        )
-
+    /// 新增：删除指定记录
+    static func delete(_ record: ChatRecord) {
         var all = loadAll()
-        all.append(record)
+        all.removeAll { $0.id == record.id }
         saveAll(all)
     }
 
-    static func loadAll() -> [ChatRecord] {
-        if let data = UserDefaults.standard.data(forKey: storageKey),
-           let records = try? JSONDecoder().decode([ChatRecord].self, from: data) {
-            return records
-        }
-        return []
-    }
-
-    static func clear() {
-        UserDefaults.standard.removeObject(forKey: storageKey)
-    }
+    /// 其他已有方法…
 }

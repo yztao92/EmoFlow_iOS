@@ -35,7 +35,7 @@ struct ContentView: View {
 
                 ZStack {
                     HeartShape()
-                        .stroke(selectedEmotion?.color ?? .green, lineWidth: 3)
+                        .stroke(selectedEmotion?.color ?? .gray, lineWidth: 3)
                         .frame(width: 200, height: 180)
                         .scaleEffect(heartScale)
 
