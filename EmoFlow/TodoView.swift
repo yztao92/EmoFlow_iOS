@@ -9,7 +9,6 @@
 import SwiftUI
 
 struct TodoView: View {
-    // TODO: 你可以用 @State 或 @ObservedObject 持久化你的待办
     @State private var items: [String] = []
     @State private var newItem = ""
 
@@ -23,6 +22,7 @@ struct TodoView: View {
                             guard !newItem.isEmpty else { return }
                             items.append(newItem)
                             newItem = ""
+                            saveItems()
                         }
                     }
                 }
@@ -33,6 +33,7 @@ struct TodoView: View {
                     }
                     .onDelete { idx in
                         items.remove(atOffsets: idx)
+                        saveItems()
                     }
                 }
             }
@@ -40,7 +41,18 @@ struct TodoView: View {
             .toolbar {
                 EditButton()
             }
+            .onAppear {
+                loadItems()
+            }
         }
+    }
+    
+    private func saveItems() {
+        UserDefaults.standard.set(items, forKey: "todo_items")
+    }
+    
+    private func loadItems() {
+        items = UserDefaults.standard.stringArray(forKey: "todo_items") ?? []
     }
 }
 

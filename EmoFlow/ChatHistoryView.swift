@@ -1,9 +1,10 @@
 import SwiftUI
 
 struct ChatHistoryView: View {
+    @Binding var selectedRecord: ChatRecord?
     @State private var records: [ChatRecord] = []
 
-    /// 按“月/日”分组，同时保留该组的最大日期用于排序；组内再按照 record.date 降序
+    /// 按"月/日"分组，同时保留该组的最大日期用于排序；组内再按照 record.date 降序
     private var groupedRecords: [GroupedRecord] {
         // 先按字符串分组
         let dict = Dictionary(grouping: records) { record in
@@ -29,56 +30,52 @@ struct ChatHistoryView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                ForEach(groupedRecords) { section in
-                    Section(header:
-                        Text(section.dateString)  // 比如 "6/24"
-                            .font(.footnote)
-                            .foregroundColor(.gray)
-                            .textCase(.none)
-                    ) {
-                        ForEach(section.items) { record in
-                            NavigationLink(value: record) {
-                                HStack(spacing: 12) {
-                                    Image(record.safeEmotion.iconName)
-                                        .resizable()
-                                        .frame(width: 32, height: 32)
+        List {
+            ForEach(groupedRecords) { section in
+                Section(header:
+                    Text(section.dateString)  // 比如 "6/24"
+                        .font(.footnote)
+                        .foregroundColor(.gray)
+                        .textCase(.none)
+                ) {
+                    ForEach(section.items) { record in
+                        Button(action: { selectedRecord = record }) {
+                            HStack(spacing: 12) {
+                                Image(record.safeEmotion.iconName)
+                                    .resizable()
+                                    .frame(width: 32, height: 32)
 
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(record.summary)
-                                            .font(.body)
-                                            .lineLimit(1)
-                                        Text(record.date.formatted(.dateTime.hour().minute()))
-                                            .font(.footnote)
-                                            .foregroundColor(.gray)
-                                    }
-
-                                    Spacer()
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(record.summary)
+                                        .font(.body)
+                                        .lineLimit(1)
+                                    Text(record.date.formatted(.dateTime.hour().minute()))
+                                        .font(.footnote)
+                                        .foregroundColor(.gray)
                                 }
-                                .padding(.vertical, 8)
+
+                                Spacer()
                             }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    delete(record)
-                                } label: {
-                                    Label("删除", systemImage: "trash")
-                                }
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                delete(record)
+                            } label: {
+                                Label("删除", systemImage: "trash")
                             }
                         }
                     }
                 }
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Color(UIColor.systemGroupedBackground))
-            .navigationTitle("记录")
-            .navigationDestination(for: ChatRecord.self) { record in
-                ChatRecordDetailView(record: record)
-            }
-            .onAppear {
-                records = RecordManager.loadAll()
-            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Color(UIColor.systemGroupedBackground))
+        .navigationTitle("心情笔记")
+        .onAppear {
+            records = RecordManager.loadAll()
         }
     }
 

@@ -20,7 +20,7 @@ struct EmotionBubble: View {
             .scaledToFit()
             .frame(width: 64, height: 64)
             .scaleEffect(isDropped ? 0 : (isDragging ? 1.2 : 1.0))
-            .shadow(radius: isDragging ? 6 : 3)
+            .shadow(color: Color.black.opacity(0.10), radius: isDragging ? 8 : 4, x: 0, y: 2)
             .animation(.spring(response: 0.4, dampingFraction: 0.5), value: isDragging)
             .opacity(isDropped ? 0 : 1)
             // 不再 onDrag/onDrop

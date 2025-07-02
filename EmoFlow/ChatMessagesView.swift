@@ -38,14 +38,19 @@ struct ChatMessagesView: View {
             }
 
             if isLoading {
-                HStack {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                    Text("AI 正在思考…")
-                        .foregroundColor(.gray)
-                        .font(.subheadline)
+                HStack(alignment: .bottom, spacing: 8) {
+                    Image(aiAvatarImageName)
+                        .resizable()
+                        .frame(width: 36, height: 36)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    TextBubbleView(
+                        text: "AI 正在思考…",
+                        color: Color.gray.opacity(0.18),
+                        alignment: .leading,
+                        isLoading: true
+                    )
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.horizontal, 12) // <<< 推荐 12 或 16
@@ -57,13 +62,25 @@ struct TextBubbleView: View {
     let text: String
     let color: Color
     let alignment: Alignment
+    var isLoading: Bool = false
+
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        Text(text)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 12)
-            .background(color)
-            .cornerRadius(12)
-            .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: alignment)
+        HStack(spacing: 8) {
+            if isLoading {
+                ProgressView()
+                    .progressViewStyle(.circular)
+            }
+            Text(text)
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(color)
+                .shadow(color: (colorScheme == .dark ? Color.black.opacity(0.18) : Color.gray.opacity(0.10)), radius: 6, x: 0, y: 2)
+        )
+        .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: alignment)
     }
 }
