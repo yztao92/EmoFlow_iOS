@@ -14,68 +14,95 @@ struct MainView: View {
     @State private var sessionID: String = UUID().uuidString
     @State private var chatActive: Bool = false
     @State private var selectedRecord: ChatRecord? = nil
+    @Namespace private var tabAnim
     
-    private func tabTitle(for tab: Int) -> String {
-        switch tab {
-        case 0: return ""
-        case 1: return "心情笔记"
-        case 2: return "设置"
-        default: return ""
-        }
-    }
-    
+    private let tabIcons = [
+        ("tab_heart_default", "tab_heart_selected"),
+        ("tab_record_default", "tab_record_selected"),
+        ("tab_settings_default", "tab_settings_selected")
+    ]
+    private let tabTitles = ["", "心情笔记", "设置"]
+
     var body: some View {
         NavigationStack {
-            TabView(selection: $selectedTab) {
-                ContentView(
-                    onTriggerChat: { emotion, message in
-                        self.emotions = [emotion]
-                        self.initialMessage = message
-                        self.sessionID = UUID().uuidString
-                        DispatchQueue.main.async {
-                            self.chatActive = true
+            VStack(spacing: 0) {
+                // 顶部标题区
+                ZStack {
+                    ForEach(0..<tabTitles.count, id: \ .self) { idx in
+                        if selectedTab == idx && !tabTitles[idx].isEmpty {
+                            Text(tabTitles[idx])
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity)
+                                .transition(.opacity)
                         }
-                    },
-                    emotions: $emotions
-                )
-                .tabItem {
-                    Image(selectedTab == 0 ? "tab_heart_selected" : "tab_heart_default")
-                }
-                .tag(0)
-                
-                ChatHistoryView(selectedRecord: $selectedRecord)
-                    .tabItem {
-                        Image(selectedTab == 1 ? "tab_record_selected" : "tab_record_default")
-                    }
-                    .tag(1)
-                
-                SettingsView()
-                    .tabItem {
-                        Image(selectedTab == 2 ? "tab_settings_selected" : "tab_settings_default")
-                    }
-                    .tag(2)
-            }
-            .navigationTitle(tabTitle(for: selectedTab))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    if !tabTitle(for: selectedTab).isEmpty {
-                        Text(tabTitle(for: selectedTab))
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundColor(.primary)
                     }
                 }
+                .frame(height: 44)
+                .background(Color(.systemGroupedBackground))
+                .animation(.easeInOut(duration: 0.25), value: selectedTab)
+                
+                // 内容区
+                ZStack {
+                    if selectedTab == 0 {
+                        ContentView(
+                            onTriggerChat: { emotion, message in
+                                self.emotions = [emotion]
+                                self.initialMessage = message
+                                self.sessionID = UUID().uuidString
+                                DispatchQueue.main.async {
+                                    self.chatActive = true
+                                }
+                            },
+                            emotions: $emotions
+                        )
+                        .transition(.opacity)
+                    }
+                    if selectedTab == 1 {
+                        ChatHistoryView(selectedRecord: $selectedRecord)
+                            .transition(.opacity)
+                    }
+                    if selectedTab == 2 {
+                        SettingsView()
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.25), value: selectedTab)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
+                // 自定义TabBar
+                HStack {
+                    ForEach(0..<tabIcons.count, id: \ .self) { idx in
+                        Spacer()
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                selectedTab = idx
+                            }
+                        }) {
+                            Image(selectedTab == idx ? tabIcons[idx].1 : tabIcons[idx].0)
+                                .resizable()
+                                .frame(width: 28, height: 28)
+                        }
+                        Spacer()
+                    }
+                }
+                .frame(height: 56)
+                .background(.ultraThinMaterial)
             }
+            .ignoresSafeArea(.keyboard)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            // 跳转详情
             .navigationDestination(item: $selectedRecord) { record in
                 ChatRecordDetailView(record: record)
             }
+            // 跳转对话
             .navigationDestination(isPresented: $chatActive) {
                 ChatView(
                     emotions: $emotions,
                     selectedTab: $selectedTab,
                     initialMessage: initialMessage,
-                    sessionID: sessionID
+                    sessionID: sessionID,
+                    selectedRecord: $selectedRecord
                 )
             }
         }

@@ -23,4 +23,13 @@ extension EmotionType {
         case .happy: return "EmojiHappy"
         }
     }
+
+    var displayName: String {
+        switch self {
+        case .happy: return "开心"
+        case .tired: return "疲惫"
+        case .sad: return "悲伤"
+        case .angry: return "愤怒"
+        }
+    }
 }

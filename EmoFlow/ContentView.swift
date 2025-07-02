@@ -101,7 +101,6 @@ struct ContentView: View {
         }
         .padding()
         .onAppear(perform: resetState)
-        .navigationTitle("心情")
     }
 
     private func startVibration() {

@@ -37,7 +37,6 @@ struct TodoView: View {
                     }
                 }
             }
-            .navigationTitle("待办")
             .toolbar {
                 EditButton()
             }

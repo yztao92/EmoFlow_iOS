@@ -42,7 +42,7 @@ class JournalService {
     static let shared = JournalService()
     private init() {}
 
-    private let url = URL(string: "http://47.238.87.240:8000:8000/journal/generate")!
+    private let url = URL(string: "http://47.238.87.240:8000/journal/generate")!
     private let timeoutInterval: TimeInterval = 30.0
 
     /// 生成心情日记

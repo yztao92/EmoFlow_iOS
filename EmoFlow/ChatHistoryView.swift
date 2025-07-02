@@ -2,102 +2,187 @@ import SwiftUI
 
 struct ChatHistoryView: View {
     @Binding var selectedRecord: ChatRecord?
-    @State private var records: [ChatRecord] = []
-
-    /// 按"月/日"分组，同时保留该组的最大日期用于排序；组内再按照 record.date 降序
-    private var groupedRecords: [GroupedRecord] {
-        // 先按字符串分组
-        let dict = Dictionary(grouping: records) { record in
-            record.date.formatted(.dateTime.month().day()) // "6/24"
-        }
-
-        // 变成带 Date 值的分组
-        let groups: [GroupedRecord] = dict.map { key, items in
-            // 先把组内 items 按 date 降序（最新条目在前）
-            let sortedItems = items.sorted { $0.date > $1.date }
-            // 用组内最新那条的 date 作为组的排序依据
-            let maxDate = sortedItems.first!.date
-            return GroupedRecord(
-                id: key,
-                dateString: key,
-                dateValue: maxDate,
-                items: sortedItems
-            )
-        }
-
-        // 最后把所有组按 dateValue 降序（最新的组在前）
-        return groups.sorted { $0.dateValue > $1.dateValue }
+    @State private var records: [ChatRecord] = RecordManager.loadAll()
+    @State private var selectedEmotion: EmotionType? = nil
+    
+    // 筛选栏数据
+    private let filterTabs: [(icon: String?, label: String?, emotion: EmotionType?)] = [
+        (nil, "所有", nil),
+        ("EmojiHappy", "开心", .happy),
+        ("EmojiTired", "疲惫", .tired),
+        ("EmojiSad", "悲伤", .sad),
+        ("EmojiAngry", "愤怒", .angry)
+    ]
+    
+    // 统计所有记录中实际存在的情绪类型
+    private var allEmotions: [EmotionType] {
+        Set(records.compactMap { $0.emotion }).sorted { $0.rawValue < $1.rawValue }
     }
-
+    
+    // 构建动态filterTabs
+    private var dynamicFilterTabs: [(icon: String?, label: String, emotion: EmotionType?)] {
+        var tabs: [(icon: String?, label: String, emotion: EmotionType?)] = [ (nil, "所有", nil) ]
+        for emo in allEmotions {
+            tabs.append((emo.iconName, emo.displayName, emo))
+        }
+        return tabs
+    }
+    
+    // 分组数据
+    private var groupedRecords: [(date: String, items: [ChatRecord])] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        let groups = Dictionary(grouping: filteredRecords) { record in
+            formatter.string(from: record.date)
+        }
+        return groups.sorted { $0.key > $1.key }.map { ($0.key, $0.value) }
+    }
+    
+    private var filteredRecords: [ChatRecord] {
+        if let emo = selectedEmotion {
+            return records.filter { $0.emotion == emo }
+        } else {
+            return records
+        }
+    }
+    
+    // 判断是否显示filter
+    private var shouldShowFilter: Bool {
+        if selectedEmotion == nil {
+            return allEmotions.count >= 2
+        } else {
+            return true
+        }
+    }
+    
     var body: some View {
-        List {
-            ForEach(groupedRecords) { section in
-                Section(header:
-                    Text(section.dateString)  // 比如 "6/24"
-                        .font(.footnote)
-                        .foregroundColor(.gray)
-                        .textCase(.none)
-                ) {
-                    ForEach(section.items) { record in
-                        Button(action: { selectedRecord = record }) {
-                            HStack(spacing: 12) {
-                                Image(record.safeEmotion.iconName)
-                                    .resizable()
-                                    .frame(width: 32, height: 32)
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(record.summary)
-                                        .font(.body)
-                                        .lineLimit(1)
-                                    Text(record.date.formatted(.dateTime.hour().minute()))
-                                        .font(.footnote)
-                                        .foregroundColor(.gray)
+        VStack(spacing: 0) {
+            // 顶部大标题
+            // Text("心情日记")
+            //     .font(.system(size: 28, weight: .bold))
+            //     .frame(maxWidth: .infinity)
+            //     .padding(.top, 24)
+            //     .padding(.bottom, 8)
+            // 吸顶筛选栏
+            if shouldShowFilter {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(dynamicFilterTabs, id: \ .label) { tab in
+                            let isSelected = selectedEmotion == tab.emotion
+                            Button(action: {
+                                withAnimation(.easeInOut) {
+                                    selectedEmotion = tab.emotion
                                 }
-
-                                Spacer()
+                            }) {
+                                HStack(spacing: 6) {
+                                    if let icon = tab.icon, !icon.isEmpty {
+                                        Image(icon)
+                                            .resizable()
+                                            .frame(width: 24, height: 24)
+                                    }
+                                    Text(tab.label)
+                                        .font(.system(size: 16, weight: .medium))
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(isSelected ? Color.white : Color.clear)
+                                .foregroundColor(isSelected ? .blue : .gray)
+                                .clipShape(Capsule())
                             }
-                            .padding(.vertical, 8)
+                            .buttonStyle(PlainButtonStyle())
                         }
-                        .buttonStyle(PlainButtonStyle())
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                }
+                .background(Color(.systemGroupedBackground))
+            }
+            // 分组列表
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(groupedRecords, id: \ .date) { group in
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(group.date)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(.gray)
+                                .padding(.leading, 18)
+                                .padding(.vertical, 8)
+                            HistoryDayCardView(records: group.items, selectedRecord: $selectedRecord, onDelete: { record in
                                 delete(record)
-                            } label: {
-                                Label("删除", systemImage: "trash")
-                            }
+                            })
                         }
                     }
                 }
+                .padding(.top, 8)
+                .padding(.bottom, 16)
             }
+            .background(Color(.systemGroupedBackground))
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(Color(UIColor.systemGroupedBackground))
-        .navigationTitle("心情笔记")
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .onAppear {
             records = RecordManager.loadAll()
         }
     }
-
+    
     private func delete(_ record: ChatRecord) {
         RecordManager.delete(record)
         records.removeAll { $0.id == record.id }
     }
 }
 
-// 把 dateValue（Date）也带进来，方便排序
-fileprivate struct GroupedRecord: Identifiable {
-    let id: String              // 分组 key，比如 "6/24"
-    let dateString: String      // 同上，用于显示
-    let dateValue: Date         // 用于排序
-    let items: [ChatRecord]
-
-    var identity: String { id }
-    var itemCount: Int { items.count }
-    // Identifiable:
-    var hashValue: Int { id.hashValue }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
-    static func == (lhs: GroupedRecord, rhs: GroupedRecord) -> Bool {
-        lhs.id == rhs.id
+struct HistoryDayCardView: View {
+    let records: [ChatRecord]
+    @Binding var selectedRecord: ChatRecord?
+    var onDelete: (ChatRecord) -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            let sortedRecords = records.sorted(by: { $0.date > $1.date })
+            ForEach(Array(sortedRecords.enumerated()), id: \ .element.id) { idx, record in
+                Button(action: {
+                    selectedRecord = record
+                }) {
+                    HStack {
+                        Image((record.emotion?.iconName) ?? "EmojiHappy")
+                            .resizable()
+                            .frame(width: 28, height: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(record.summary.isEmpty ? "Recordings" : record.summary)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+                            Text(timeString(record.date))
+                                .font(.system(size: 12))
+                                .foregroundColor(.gray)
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 16)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        onDelete(record)
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                }
+                if idx < sortedRecords.count - 1 {
+                    Divider().padding(.leading, 36)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Color.white)
+        .cornerRadius(16)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
+    }
+    
+    private func timeString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: date)
     }
 }

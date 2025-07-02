@@ -51,8 +51,6 @@ struct ChatRecordDetailView: View {
             }
             .padding()
         }
-        .navigationTitle("详情")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

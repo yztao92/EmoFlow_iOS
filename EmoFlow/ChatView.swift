@@ -5,6 +5,7 @@ struct ChatView: View {
     @Binding var selectedTab: Int      // 当前选中 Tab 索引
     var initialMessage: String         // 新增：初始消息
     var sessionID: String
+    @Binding var selectedRecord: ChatRecord?
 
     // 用户头像表情
     private var userEmojiImageName: String {
@@ -172,8 +173,6 @@ struct ChatView: View {
                 .animation(.easeInOut, value: showToast)
             }
         }
-        .navigationTitle("情绪对话")
-        .navigationBarTitleDisplayMode(.inline)
         .alert(isPresented: $showSavedAlert) {
             Alert(title: Text("已存档"),
                   message: Text("本次聊天内容已保存到记录页"),
@@ -295,8 +294,8 @@ struct ChatView: View {
                 RecordManager.saveAll(chatRecords)
                 DispatchQueue.main.async {
                     if !didTimeout {
-                        showSavedAlert = true
                         selectedTab = 1
+                        selectedRecord = newRecord // 跳转到详情页
                         isSaving = false
                     }
                 }
