@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct ChatHistoryView: View {
+    @Binding var records: [ChatRecord]
     @Binding var selectedRecord: ChatRecord?
-    @State private var records: [ChatRecord] = RecordManager.loadAll()
     @State private var selectedEmotion: EmotionType? = nil
     
     // 筛选栏数据
@@ -32,10 +32,18 @@ struct ChatHistoryView: View {
     private var groupedRecords: [(date: String, items: [ChatRecord])] {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, yyyy"
+        // 先用 Date 分组
         let groups = Dictionary(grouping: filteredRecords) { record in
-            formatter.string(from: record.date)
+            let calendar = Calendar.current
+            let components = calendar.dateComponents([.year, .month, .day], from: record.date)
+            return calendar.date(from: components)!
         }
-        return groups.sorted { $0.key > $1.key }.map { ($0.key, $0.value) }
+        // 用 Date 排序
+        let sortedGroups = groups.sorted { $0.key > $1.key }
+        // 显示时再格式化
+        return sortedGroups.map { (date, items) in
+            (formatter.string(from: date), items)
+        }
     }
     
     private var filteredRecords: [ChatRecord] {
@@ -57,12 +65,6 @@ struct ChatHistoryView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部大标题
-            // Text("心情日记")
-            //     .font(.system(size: 28, weight: .bold))
-            //     .frame(maxWidth: .infinity)
-            //     .padding(.top, 24)
-            //     .padding(.bottom, 8)
             // 吸顶筛选栏
             if shouldShowFilter {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -74,7 +76,7 @@ struct ChatHistoryView: View {
                                     selectedEmotion = tab.emotion
                                 }
                             }) {
-                                HStack(spacing: 6) {
+                                HStack(spacing: 2) {
                                     if let icon = tab.icon, !icon.isEmpty {
                                         Image(icon)
                                             .resizable()
@@ -85,7 +87,15 @@ struct ChatHistoryView: View {
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
-                                .background(isSelected ? Color.white : Color.clear)
+                                .background(
+                                    isSelected
+                                        ? Color(UIColor { trait in
+                                            trait.userInterfaceStyle == .dark
+                                                ? UIColor.secondarySystemBackground
+                                                : UIColor.white
+                                        })
+                                        : Color.clear
+                                )
                                 .foregroundColor(isSelected ? .blue : .gray)
                                 .clipShape(Capsule())
                             }
@@ -113,12 +123,13 @@ struct ChatHistoryView: View {
                         }
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, 4)
                 .padding(.bottom, 16)
             }
             .background(Color(.systemGroupedBackground))
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationBarTitle("心情日记", displayMode: .inline)
         .onAppear {
             records = RecordManager.loadAll()
         }
@@ -139,28 +150,27 @@ struct HistoryDayCardView: View {
         VStack(alignment: .leading, spacing: 0) {
             let sortedRecords = records.sorted(by: { $0.date > $1.date })
             ForEach(Array(sortedRecords.enumerated()), id: \ .element.id) { idx, record in
-                Button(action: {
-                    selectedRecord = record
-                }) {
-                    HStack {
-                        Image((record.emotion?.iconName) ?? "EmojiHappy")
-                            .resizable()
-                            .frame(width: 28, height: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(record.summary.isEmpty ? "Recordings" : record.summary)
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.primary)
-                                .lineLimit(1)
-                            Text(timeString(record.date))
-                                .font(.system(size: 12))
-                                .foregroundColor(.gray)
-                        }
-                        Spacer()
+                HStack {
+                    Image((record.emotion?.iconName) ?? "EmojiHappy")
+                        .resizable()
+                        .frame(width: 28, height: 28)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(record.summary.isEmpty ? "Recordings" : record.summary)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        Text(timeString(record.date))
+                            .font(.system(size: 12))
+                            .foregroundColor(.gray)
                     }
-                    .padding(.vertical, 16)
+                    Spacer()
                 }
-                .buttonStyle(PlainButtonStyle())
-                .swipeActions(edge: .trailing) {
+                .padding(.vertical, 16)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    selectedRecord = record
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
                         onDelete(record)
                     } label: {
@@ -174,7 +184,13 @@ struct HistoryDayCardView: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
-        .background(Color.white)
+        .background(
+            Color(UIColor { trait in
+                trait.userInterfaceStyle == .dark
+                    ? UIColor.secondarySystemBackground
+                    : UIColor.white
+            })
+        )
         .cornerRadius(16)
         .padding(.horizontal, 8)
         .padding(.bottom, 8)

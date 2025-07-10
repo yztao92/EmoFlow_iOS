@@ -38,10 +38,10 @@ struct ChatView: View {
 
     var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        Color.clear.frame(height: 32)
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Color.clear.frame(height: 32)
                         if isLoading {
                             HStack(alignment: .bottom, spacing: 8) {
                                 Image("AIicon")
@@ -65,23 +65,23 @@ struct ChatView: View {
                                 Spacer()
                             }
                         } else {
-                            ChatMessagesView(
-                                messages: messages,
-                                isLoading: isLoading,
-                                userBubbleColor: userBubbleColor,
-                                userEmojiImageName: userEmojiImageName,
-                                aiAvatarImageName: "AIicon"
-                            )
+                    ChatMessagesView(
+                        messages: messages,
+                        isLoading: isLoading,
+                        userBubbleColor: userBubbleColor,
+                        userEmojiImageName: userEmojiImageName,
+                        aiAvatarImageName: "AIicon"
+                    )
                         }
+                }
+                // 使用两参数 onChange，避免单参废弃警告
+                .onChange(of: messages.count) { oldCount, newCount in
+                    guard newCount > oldCount,
+                          let lastId = messages.last?.id else { return }
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        proxy.scrollTo(lastId, anchor: .bottom)
                     }
-                    // 使用两参数 onChange，避免单参废弃警告
-                    .onChange(of: messages.count) { oldCount, newCount in
-                        guard newCount > oldCount,
-                              let lastId = messages.last?.id else { return }
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            proxy.scrollTo(lastId, anchor: .bottom)
-                        }
-                    }
+                }
                     // 点击聊天区域时隐藏键盘但保持焦点
                     .onTapGesture {
                         if isInputFocused {
@@ -89,11 +89,11 @@ struct ChatView: View {
                             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                         }
                     }
-                }
+            }
 
-                Divider()
+            Divider()
 
-                HStack(spacing: 8) {
+            HStack(spacing: 8) {
                     // 可预留左侧icon
                     // Image(systemName: "mic.fill").foregroundColor(.gray)
                     ZStack(alignment: .leading) {
@@ -127,7 +127,7 @@ struct ChatView: View {
                             .foregroundColor((inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading) ? .gray : .white)
                     }
                     .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
-                }
+            }
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .background(
@@ -224,9 +224,9 @@ struct ChatView: View {
         // 只在非initialMessage时append user消息
         let isInitial = (message != nil)
         if !isInitial {
-            let userMessage = ChatMessage(role: .user, content: trimmed)
-            messages.append(userMessage)
-            inputText = ""
+        let userMessage = ChatMessage(role: .user, content: trimmed)
+        messages.append(userMessage)
+        inputText = ""
         }
         isLoading = true
         isInputFocused = false

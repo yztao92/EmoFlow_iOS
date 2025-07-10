@@ -74,8 +74,8 @@ class ChatService {
 
         // 4. 发起网络请求
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
+        let (data, response) = try await URLSession.shared.data(for: request)
+
             // 5. 检查HTTP状态码
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw ChatServiceError.invalidResponse
@@ -86,13 +86,13 @@ class ChatService {
             }
 
             // 6. 调试：打印原始响应
-            if let text = String(data: data, encoding: .utf8) {
-                print("📦 原始返回内容： \(text)")
-            }
+        if let text = String(data: data, encoding: .utf8) {
+            print("📦 原始返回内容： \(text)")
+        }
 
             // 7. 解析并返回
-            let wrapper = try JSONDecoder().decode(ChatResponseWrapper.self, from: data)
-            return (wrapper.response.answer, wrapper.response.references)
+        let wrapper = try JSONDecoder().decode(ChatResponseWrapper.self, from: data)
+        return (wrapper.response.answer, wrapper.response.references)
             
         } catch let error as ChatServiceError {
             throw error

@@ -39,7 +39,7 @@ struct PersistenceController {
             if let error = error as NSError? {
                 // 在生产环境中，我们应该记录错误而不是崩溃
                 print("Core Data error: \(error), \(error.userInfo)")
-                
+
                 /*
                  Typical reasons for an error here include:
                  * The parent directory does not exist, cannot be created, or disallows writing.

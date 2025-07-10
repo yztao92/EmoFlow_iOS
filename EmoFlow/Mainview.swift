@@ -14,6 +14,7 @@ struct MainView: View {
     @State private var sessionID: String = UUID().uuidString
     @State private var chatActive: Bool = false
     @State private var selectedRecord: ChatRecord? = nil
+    @State private var records: [ChatRecord] = RecordManager.loadAll()
     @Namespace private var tabAnim
     
     private let tabIcons = [
@@ -27,20 +28,7 @@ struct MainView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 // 顶部标题区
-                ZStack {
-                    ForEach(0..<tabTitles.count, id: \ .self) { idx in
-                        if selectedTab == idx && !tabTitles[idx].isEmpty {
-                            Text(tabTitles[idx])
-                                .font(.system(size: 17, weight: .medium))
-                                .foregroundColor(.primary)
-                                .frame(maxWidth: .infinity)
-                                .transition(.opacity)
-                        }
-                    }
-                }
-                .frame(height: 44)
-                .background(Color(.systemGroupedBackground))
-                .animation(.easeInOut(duration: 0.25), value: selectedTab)
+                // 删除顶部自定义tabTitles标题的ZStack及相关frame/background/animation
                 
                 // 内容区
                 ZStack {
@@ -59,7 +47,7 @@ struct MainView: View {
                         .transition(.opacity)
                     }
                     if selectedTab == 1 {
-                        ChatHistoryView(selectedRecord: $selectedRecord)
+                        ChatHistoryView(records: $records, selectedRecord: $selectedRecord)
                             .transition(.opacity)
                     }
                     if selectedTab == 2 {
@@ -69,7 +57,7 @@ struct MainView: View {
                 }
                 .animation(.easeInOut(duration: 0.25), value: selectedTab)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
+
                 // 自定义TabBar
                 HStack {
                     ForEach(0..<tabIcons.count, id: \ .self) { idx in
@@ -82,7 +70,7 @@ struct MainView: View {
                             Image(selectedTab == idx ? tabIcons[idx].1 : tabIcons[idx].0)
                                 .resizable()
                                 .frame(width: 28, height: 28)
-                        }
+                }
                         Spacer()
                     }
                 }
@@ -93,17 +81,20 @@ struct MainView: View {
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             // 跳转详情
             .navigationDestination(item: $selectedRecord) { record in
-                ChatRecordDetailView(record: record)
-            }
+                ChatrecordDetailView(record: record, onSave: { newSummary in
+                    record.summary = newSummary
+                    RecordManager.saveAll(records)
+                })
+        }
             // 跳转对话
             .navigationDestination(isPresented: $chatActive) {
-                ChatView(
+            ChatView(
                     emotions: $emotions,
-                    selectedTab: $selectedTab,
+                selectedTab: $selectedTab,
                     initialMessage: initialMessage,
                     sessionID: sessionID,
                     selectedRecord: $selectedRecord
-                )
+            )
             }
         }
     }

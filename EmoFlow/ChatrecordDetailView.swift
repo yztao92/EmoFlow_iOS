@@ -1,56 +1,234 @@
 // ChatRecordDetailView.swift
 import SwiftUI
+import UIKit
 
-struct ChatRecordDetailView: View {
-    let record: ChatRecord
-    @State private var showAllMessages = false
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+struct ChatrecordDetailView: View {
+    @ObservedObject var record: ChatRecord
+    var onSave: ((String) -> Void)? = nil
+    @State private var selectedPage = 0
+    @State private var showEditSheet = false
+    @State private var editedSummary: String = ""
+    @State private var showShareSheet = false
+    @State private var shareImage: UIImage? = nil
+    // 用于截图的ID
+    private let contentCaptureID = "noteContentCapture"
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // 头部信息
-                HStack {
-                    Image(record.safeEmotion.iconName)
-                        .resizable()
-                        .frame(width: 28, height: 28)
-                    Text("心情日记")
-                        .font(.title2).bold()
-                    Spacer()
-                    Text(record.date.formatted(.dateTime.month().day().hour().minute()))
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-                .padding(.bottom, 8)
-                
-                // 摘要
-                // Text("摘要")
-                //     .font(.headline)
-                //     .padding(.bottom, 4)
-                Text(record.summary)
-                    .font(.body)
-                    .padding(.bottom, 16)
-                
-                // 聊天记录
-                Text("聊天记录")
-                    .font(.headline)
-                    .padding(.bottom, 8)
-                
-                LazyVStack(spacing: 12) {
-                    ForEach(showAllMessages ? record.messages : Array(record.messages.prefix(2))) { message in
-                        ChatMessageRow(message: message, record: record)
-                    }
-                    if record.messages.count > 2 {
-                        Button(showAllMessages ? "收起" : "展开全部") {
-                            showAllMessages.toggle()
+        ZStack {
+            Color(.systemBackground).ignoresSafeArea()
+            VStack(spacing: 0) {
+                // 移除内容区的主标题
+                TabView(selection: $selectedPage) {
+                    // 笔记内容页
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(record.summary)
+                                .font(.body)
+                                .padding(.top, 8)
+                            HStack {
+                                Spacer()
+                                Text(formattedDate(record.date))
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                            }
                         }
-                        .font(.footnote)
-                        .foregroundColor(.blue)
-                        .padding(.top, 4)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(16)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                    }
+                    .tag(0)
+
+                    // 聊天记录页
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            let messages = record.messages
+                            if !messages.isEmpty {
+                                ForEach(messages, id: \ .id) { msg in
+                                    HStack(alignment: .bottom, spacing: 8) {
+                                        if msg.role == .assistant {
+                                            Image("AIicon")
+                                                .resizable()
+                                                .frame(width: 24, height: 24)
+                                            Text(msg.content)
+                                                .padding(12)
+                                                .background(Color(.darkGray))
+                                                .foregroundColor(.white)
+                                                .cornerRadius(16)
+                                            Spacer()
+                                        } else {
+                                            Spacer()
+                                            Text(msg.content)
+                                                .padding(12)
+                                                .background(Color(.secondarySystemBackground))
+                                                .foregroundColor(.primary)
+                                                .cornerRadius(16)
+                                            Image((record.emotion?.iconName) ?? "EmojiHappy")
+                                                .resizable()
+                                                .frame(width: 24, height: 24)
+                                        }
+                                    }
+                                    .padding(.vertical, 2)
+                                    .padding(.horizontal, 8)
+                                }
+                            } else {
+                                Text("暂无聊天记录")
+                                    .foregroundColor(.gray)
+                                    .padding()
+                            }
+                        }
+                        .padding()
+                    }
+                    .tag(1)
+                }
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+
+                // 按钮放在分页指示器上方
+                if selectedPage == 0 {
+                    HStack(spacing: 24) {
+                        Button(action: {
+                            captureNoteContent()
+                        }) {
+                            HStack {
+                                Image(systemName: "square.and.arrow.up")
+                                Text("分享")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color(.systemGroupedBackground))
+                            .cornerRadius(12)
+                        }
+                        Button(action: {
+                            editedSummary = record.summary
+                            showEditSheet = true
+                        }) {
+                            HStack {
+                                Image(systemName: "pencil")
+                                Text("编辑")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color(.systemGroupedBackground))
+                            .cornerRadius(12)
+                        }
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.top, 8)
+                }
+                // 点状分页指示器始终在最底部
+                HStack(spacing: 8) {
+                    ForEach(0..<2) { idx in
+                        Circle()
+                            .fill(selectedPage == idx ? Color.blue : Color.gray.opacity(0.3))
+                            .frame(width: 8, height: 8)
                     }
                 }
+                .padding(.top, 8)
+                .padding(.bottom, 16)
             }
-            .padding()
         }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("心情笔记")
+                    .font(.headline).bold()
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let image = shareImage {
+                ShareSheet(activityItems: [image])
+            }
+        }
+        .sheet(isPresented: $showEditSheet) {
+            NavigationView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("编辑心情日记")
+                        .font(.headline)
+                        .padding(.top)
+                    TextEditor(text: $editedSummary)
+                        .font(.body)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(8)
+                        .frame(minHeight: 200)
+                    Spacer()
+                }
+                .padding()
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationBarItems(leading: Button("返回") {
+                    showEditSheet = false
+                }, trailing: Button("保存") {
+                    record.summary = editedSummary
+                    onSave?(editedSummary)
+                    showEditSheet = false
+                })
+            }
+        }
+    }
+
+    // 截图方法
+    private func captureNoteContent() {
+        let window = UIApplication.shared.windows.first { $0.isKeyWindow }
+        guard let rootVC = window?.rootViewController else { return }
+        let hosting = UIHostingController(rootView:
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Image((record.emotion?.iconName) ?? "EmojiHappy")
+                            .resizable()
+                            .frame(width: 28, height: 28)
+                        Text("心情日记")
+                            .font(.title2).bold()
+                        Spacer()
+                        Text(record.date, style: .date)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                    Text(record.summary)
+                        .font(.body)
+                        .padding(.top, 8)
+                    HStack {
+                        Spacer()
+                        Text(formattedDate(record.date))
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding()
+                .background(Color.white)
+            }
+            .frame(width: UIScreen.main.bounds.width - 40)
+        )
+        hosting.view.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width - 40, height: 400)
+        let renderer = UIGraphicsImageRenderer(size: hosting.view.bounds.size)
+        let image = renderer.image { ctx in
+            hosting.view.drawHierarchy(in: hosting.view.bounds, afterScreenUpdates: true)
+        }
+        self.shareImage = image
+        self.showShareSheet = true
+    }
+}
+
+fileprivate func formattedDate(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+    return formatter.string(from: date)
+}
+
+// 用于 GeometryReader 的 size preference
+struct ViewSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
     }
 }
 
@@ -88,3 +266,4 @@ struct ChatMessageRow: View {
 }
 
 // 删除了TextBubbleView的重复定义，直接复用ChatMessagesView.swift中的TextBubbleView
+
