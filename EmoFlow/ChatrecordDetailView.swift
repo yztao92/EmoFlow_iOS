@@ -16,6 +16,7 @@ struct ChatrecordDetailView: View {
     @State private var selectedPage = 0
     @State private var showEditSheet = false
     @State private var editedSummary: String = ""
+    @State private var editedTitle: String = ""  // 新增：编辑标题
     @State private var showShareSheet = false
     @State private var shareImage: UIImage? = nil
     // 用于截图的ID
@@ -30,6 +31,21 @@ struct ChatrecordDetailView: View {
                     // 笔记内容页
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
+                            // 添加标题
+                            if let title = record.title, !title.isEmpty {
+                                Text(title)
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.primary)
+                                    .padding(.bottom, 4)
+                            } else {
+                                Text("今日心情")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.primary)
+                                    .padding(.bottom, 4)
+                            }
+                            
                             Text(record.summary)
                                 .font(.body)
                                 .padding(.top, 8)
@@ -109,6 +125,7 @@ struct ChatrecordDetailView: View {
                         }
                         Button(action: {
                             editedSummary = record.summary
+                            editedTitle = record.title ?? "今日心情"  // 设置标题初始值
                             showEditSheet = true
                         }) {
                             HStack {
@@ -154,23 +171,55 @@ struct ChatrecordDetailView: View {
                     Text("编辑心情日记")
                         .font(.headline)
                         .padding(.top)
-                    TextEditor(text: $editedSummary)
-                        .font(.body)
-                        .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(8)
-                        .frame(minHeight: 200)
+                    
+                    // 标题输入框
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("标题")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        TextField("请输入标题", text: $editedTitle)
+                            .font(.title3)
+                            .fontWeight(.medium)
+                            .padding()
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(8)
+                    }
+                    
+                    // 内容输入框
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("内容")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        TextEditor(text: $editedSummary)
+                            .font(.body)
+                            .padding()
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(8)
+                            .frame(minHeight: 200)
+                    }
+                    
                     Spacer()
                 }
                 .padding()
                 .navigationBarTitleDisplayMode(.inline)
-                .navigationBarItems(leading: Button("返回") {
-                    showEditSheet = false
-                }, trailing: Button("保存") {
-                    record.summary = editedSummary
-                    onSave?(editedSummary)
-                    showEditSheet = false
-                })
+                .navigationBarItems(
+                    leading: Button("返回") {
+                        showEditSheet = false
+                    },
+                    trailing: Button("保存") {
+                        record.summary = editedSummary
+                        record.title = editedTitle.isEmpty ? nil : editedTitle  // 保存标题
+                        onSave?(editedSummary)
+                        showEditSheet = false
+                    }
+                )
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Text("编辑日记")
+                            .font(.headline)
+                            .fontWeight(.medium)
+                    }
+                }
             }
         }
     }
@@ -193,6 +242,22 @@ struct ChatrecordDetailView: View {
                             .font(.subheadline)
                             .foregroundColor(.gray)
                     }
+                    
+                    // 添加标题到分享图片
+                    if let title = record.title, !title.isEmpty {
+                        Text(title)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+                            .padding(.bottom, 4)
+                    } else {
+                        Text("今日心情")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+                            .padding(.bottom, 4)
+                    }
+                    
                     Text(record.summary)
                         .font(.body)
                         .padding(.top, 8)

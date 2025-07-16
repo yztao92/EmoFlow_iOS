@@ -15,19 +15,21 @@ class ChatRecord: ObservableObject, Identifiable, Codable, Equatable, Hashable {
     @Published var messages: [ChatMessage]
     @Published var summary: String
     @Published var emotion: EmotionType?
+    @Published var title: String?  // 新增：日记标题
 
     var safeEmotion: EmotionType { emotion ?? .happy }
 
     enum CodingKeys: String, CodingKey {
-        case id, date, messages, summary, emotion
+        case id, date, messages, summary, emotion, title
     }
 
-    init(id: UUID, date: Date, messages: [ChatMessage], summary: String, emotion: EmotionType?) {
+    init(id: UUID, date: Date, messages: [ChatMessage], summary: String, emotion: EmotionType?, title: String? = nil) {
         self.id = id
         self.date = date
         self.messages = messages
         self.summary = summary
         self.emotion = emotion
+        self.title = title
     }
 
     required convenience init(from decoder: Decoder) throws {
@@ -37,7 +39,8 @@ class ChatRecord: ObservableObject, Identifiable, Codable, Equatable, Hashable {
         let messages = try container.decode([ChatMessage].self, forKey: .messages)
         let summary = try container.decode(String.self, forKey: .summary)
         let emotion = try container.decodeIfPresent(EmotionType.self, forKey: .emotion)
-        self.init(id: id, date: date, messages: messages, summary: summary, emotion: emotion)
+        let title = try container.decodeIfPresent(String.self, forKey: .title)
+        self.init(id: id, date: date, messages: messages, summary: summary, emotion: emotion, title: title)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -47,5 +50,6 @@ class ChatRecord: ObservableObject, Identifiable, Codable, Equatable, Hashable {
         try container.encode(messages, forKey: .messages)
         try container.encode(summary, forKey: .summary)
         try container.encode(emotion, forKey: .emotion)
+        try container.encode(title, forKey: .title)
     }
 }

@@ -283,13 +283,13 @@ struct ChatView: View {
         }
         Task {
             do {
-                let journal = try await JournalService.shared.generateJournal(
+                let (journal, title) = try await JournalService.shared.generateJournal(
                     emotions: [emotion],
                     messages: messages.map { ChatMessageDTO(role: $0.role.rawValue, content: $0.content) }
                 )
                 if didTimeout { return } // 超时后不再处理
                 print("📓 AI 生成的心情日记：\n\(journal)")
-                let newRecord = ChatRecord(id: UUID(), date: Date(), messages: messages, summary: journal, emotion: emotion)
+                let newRecord = ChatRecord(id: UUID(), date: Date(), messages: messages, summary: journal, emotion: emotion, title: title)
                 chatRecords.append(newRecord)
                 RecordManager.saveAll(chatRecords)
                 DispatchQueue.main.async {
@@ -303,7 +303,7 @@ struct ChatView: View {
                 if didTimeout { return }
                 print("❌ 生成心情日记失败: \(error)")
                 let fallbackSummary = messages.first?.content ?? "新会话"
-                let fallbackRecord = ChatRecord(id: UUID(), date: Date(), messages: messages, summary: fallbackSummary, emotion: emotion)
+                let fallbackRecord = ChatRecord(id: UUID(), date: Date(), messages: messages, summary: fallbackSummary, emotion: emotion, title: "今日心情")
                 chatRecords.append(fallbackRecord)
                 RecordManager.saveAll(chatRecords)
                 DispatchQueue.main.async {

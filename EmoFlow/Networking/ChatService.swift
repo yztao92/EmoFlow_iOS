@@ -1,9 +1,9 @@
 import UIKit
 import Foundation
+
 // MARK: - 请求结构
 struct ChatRequestPayload: Codable {
     let session_id: String
-    let emotions: [String]
     let messages: [ChatMessageDTO]
 }
 
@@ -28,7 +28,7 @@ enum ChatServiceError: Error, LocalizedError {
     case networkError(String)
     case invalidResponse
     case timeout
-    
+
     var errorDescription: String? {
         switch self {
         case .networkError(let message):
@@ -46,7 +46,7 @@ class ChatService {
     static let shared = ChatService()
     private init() {}
 
-    private let url = URL(string: "http://47.238.87.240:8000/chat")!
+    private let url = URL(string: "http://106.14.220.115:8000/chat")!
     private let timeoutInterval: TimeInterval = 30.0
 
     /// 发送聊天请求
@@ -61,39 +61,29 @@ class ChatService {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeoutInterval
 
-        // 2. 用外部传入的sessionID
-        let session_id = sessionID
-
-        // 3. 构造请求体
+        // 2. 构造请求体
         let payload = ChatRequestPayload(
-            session_id: session_id,
-            emotions: emotions.map { $0.rawValue },
+            session_id: sessionID,
             messages: messages
         )
         request.httpBody = try JSONEncoder().encode(payload)
 
-        // 4. 发起网络请求
+        // 3. 发起网络请求
         do {
-        let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
 
-            // 5. 检查HTTP状态码
+            // 4. 检查 HTTP 状态码
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw ChatServiceError.invalidResponse
             }
-            
             guard httpResponse.statusCode == 200 else {
                 throw ChatServiceError.networkError("HTTP \(httpResponse.statusCode)")
             }
 
-            // 6. 调试：打印原始响应
-        if let text = String(data: data, encoding: .utf8) {
-            print("📦 原始返回内容： \(text)")
-        }
+            // 5. 解码并返回结果
+            let wrapper = try JSONDecoder().decode(ChatResponseWrapper.self, from: data)
+            return (wrapper.response.answer, wrapper.response.references)
 
-            // 7. 解析并返回
-        let wrapper = try JSONDecoder().decode(ChatResponseWrapper.self, from: data)
-        return (wrapper.response.answer, wrapper.response.references)
-            
         } catch let error as ChatServiceError {
             throw error
         } catch {

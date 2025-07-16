@@ -11,13 +11,14 @@ import Foundation
 // MARK: - 请求结构
 struct JournalRequestPayload: Codable {
     let session_id: String
-    let emotions: [String]
     let messages: [ChatMessageDTO]
 }
 
 // MARK: - 响应结构
 struct JournalResponse: Codable {
     let journal: String
+    let title: String
+    let status: String
 }
 
 // MARK: - 自定义错误
@@ -42,14 +43,14 @@ class JournalService {
     static let shared = JournalService()
     private init() {}
 
-    private let url = URL(string: "http://47.238.87.240:8000/journal/generate")!
+    private let url = URL(string: "http://106.14.220.115:8000/journal/generate")!
     private let timeoutInterval: TimeInterval = 30.0
 
     /// 生成心情日记
     func generateJournal(
         emotions: [EmotionType],
         messages: [ChatMessageDTO]
-    ) async throws -> String {
+    ) async throws -> (String, String) {  // 返回 (journal, title)
         // 1. 构造 URLRequest
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -60,10 +61,9 @@ class JournalService {
         let vendor = await UIDevice.current.identifierForVendor
         let sessionID = vendor?.uuidString ?? UUID().uuidString
 
-        // 3. 构造请求体
+        // 3. 构造请求体（移除 emotions 字段）
         let payload = JournalRequestPayload(
             session_id: sessionID,
-            emotions: emotions.map { $0.rawValue },
             messages: messages
         )
         request.httpBody = try JSONEncoder().encode(payload)
@@ -81,14 +81,15 @@ class JournalService {
                 throw JournalServiceError.networkError("HTTP \(httpResponse.statusCode)")
             }
 
-            // 6. 调试：打印原始返回
-            if let text = String(data: data, encoding: .utf8) {
-                print("📘 返回日记原始数据: \(text)")
-            }
-
-            // 7. 解析并返回
+            // 6. 解析并返回
             let wrapper = try JSONDecoder().decode(JournalResponse.self, from: data)
-            return wrapper.journal
+            
+            // 检查状态
+            guard wrapper.status == "success" else {
+                throw JournalServiceError.networkError("日记生成失败")
+            }
+            
+            return (wrapper.journal, wrapper.title)
             
         } catch let error as JournalServiceError {
             throw error

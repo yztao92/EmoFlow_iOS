@@ -47,7 +47,7 @@ struct MainView: View {
                         .transition(.opacity)
                     }
                     if selectedTab == 1 {
-                        ChatHistoryView(records: $records, selectedRecord: $selectedRecord)
+                        ChatHistoryView(selectedRecord: $selectedRecord)
                             .transition(.opacity)
                     }
                     if selectedTab == 2 {
