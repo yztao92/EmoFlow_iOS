@@ -88,7 +88,7 @@ struct ChatrecordDetailView: View {
                                                 .background(Color(.secondarySystemBackground))
                                                 .foregroundColor(.primary)
                                                 .cornerRadius(16)
-                                            Image((record.emotion?.iconName) ?? "EmojiHappy")
+                                            Image((record.emotion?.iconName) ?? "Happy")
                                                 .resizable()
                                                 .frame(width: 24, height: 24)
                                         }
@@ -190,12 +190,12 @@ struct ChatrecordDetailView: View {
                         Text("内容")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        TextEditor(text: $editedSummary)
-                            .font(.body)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(8)
-                            .frame(minHeight: 200)
+                    TextEditor(text: $editedSummary)
+                        .font(.body)
+                        .padding()
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(8)
+                        .frame(minHeight: 200)
                     }
                     
                     Spacer()
@@ -204,13 +204,13 @@ struct ChatrecordDetailView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .navigationBarItems(
                     leading: Button("返回") {
-                        showEditSheet = false
+                    showEditSheet = false
                     },
                     trailing: Button("保存") {
-                        record.summary = editedSummary
+                    record.summary = editedSummary
                         record.title = editedTitle.isEmpty ? nil : editedTitle  // 保存标题
-                        onSave?(editedSummary)
-                        showEditSheet = false
+                    onSave?(editedSummary)
+                    showEditSheet = false
                     }
                 )
                 .toolbar {
@@ -232,7 +232,7 @@ struct ChatrecordDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .center, spacing: 8) {
-                        Image((record.emotion?.iconName) ?? "EmojiHappy")
+                        Image((record.emotion?.iconName) ?? "Happy")
                             .resizable()
                             .frame(width: 28, height: 28)
                         Text("心情日记")

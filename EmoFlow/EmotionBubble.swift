@@ -7,10 +7,12 @@ struct EmotionBubble: View {
 
     private var imageName: String {
         switch emotion {
-        case .happy: return "EmojiHappy"
-        case .tired: return "EmojiTired"
-        case .sad:   return "EmojiSad"
-        case .angry: return "EmojiAngry"
+        case .happy: return "Happy"
+        case .unhappy: return "Unhappy"
+        case .sad: return "Sad"
+        case .angry: return "Angry"
+        case .peaceful: return "Peaceful"
+        case .happiness: return "Happiness"
         }
     }
 

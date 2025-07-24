@@ -9,12 +9,14 @@ struct ChatView: View {
 
     // 用户头像表情
     private var userEmojiImageName: String {
-        guard let emo = emotions.first else { return "EmojiHappy" }
+        guard let emo = emotions.first else { return "Happy" }
         switch emo {
-        case .happy: return "EmojiHappy"
-        case .tired: return "EmojiTired"
-        case .sad:   return "EmojiSad"
-        case .angry: return "EmojiAngry"
+        case .happy: return "Happy"
+        case .unhappy: return "Unhappy"
+        case .sad: return "Sad"
+        case .angry: return "Angry"
+        case .peaceful: return "Peaceful"
+        case .happiness: return "Happiness"
         }
     }
     // 用户消息气泡颜色统一为微信风格灰色
@@ -244,6 +246,14 @@ struct ChatView: View {
         Task {
             do {
                 print("[LOG] ChatService.shared.sendMessage 开始, sessionID=\(sessionID)")
+                print("[LOG] 传递给ChatService的参数:")
+                print("   Session ID: \(sessionID)")
+                print("   Emotions: \(emotions)")
+                print("   Messages Count: \(sendingMessages.count)")
+                for (index, msg) in sendingMessages.enumerated() {
+                    print("   Message \(index + 1): role=\(msg.role), content=\(msg.content)")
+                }
+                
                 let (answer, references) = try await ChatService.shared.sendMessage(
                     sessionID: sessionID,
                     emotions: emotions,

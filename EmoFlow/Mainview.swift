@@ -15,6 +15,7 @@ struct MainView: View {
     @State private var chatActive: Bool = false
     @State private var selectedRecord: ChatRecord? = nil
     @State private var records: [ChatRecord] = RecordManager.loadAll()
+    @State private var showLogoutAlert = false
     @Namespace private var tabAnim
     
     private let tabIcons = [

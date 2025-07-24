@@ -9,10 +9,12 @@ struct ChatHistoryView: View {
     
     private let filterTabs: [(icon: String?, label: String, emotion: EmotionType?)] = [
         (nil, "所有", nil),
-        ("EmojiHappy", "开心", .happy),
-        ("EmojiTired", "疲惫", .tired),
-        ("EmojiSad", "悲伤", .sad),
-        ("EmojiAngry", "愤怒", .angry)
+        ("Happy", "开心", .happy),
+        ("Unhappy", "不开心", .unhappy),
+        ("Sad", "悲伤", .sad),
+        ("Angry", "愤怒", .angry),
+        ("Peaceful", "平和", .peaceful),
+        ("Happiness", "幸福", .happiness)
     ]
     
     // 动态筛选标签
@@ -110,10 +112,10 @@ struct ChatHistoryView: View {
     
     private func delete(_ record: ChatRecord) {
         withAnimation {
-            RecordManager.delete(record)
-            records.removeAll { $0.id == record.id }
-        }
+        RecordManager.delete(record)
+        records.removeAll { $0.id == record.id }
     }
+}
 }
 
 // DiaryRowView 增加 isFirst/isLast 参数，首尾有圆角和阴影，中间无圆角无阴影
@@ -124,21 +126,21 @@ struct DiaryRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             // 情绪图标
-                        Image((record.emotion?.iconName) ?? "EmojiHappy")
-                            .resizable()
+                    Image((record.emotion?.iconName) ?? "Happy")
+                        .resizable()
                 .frame(width: 32, height: 32)
                 
             // 内容区域
             VStack(alignment: .leading, spacing: 4) {
                 Text(record.title ?? (record.summary.isEmpty ? "Recordings" : record.summary))
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
                 
                 Text(record.date, style: .time)
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
-                        }
+                }
             .padding(.vertical, 8)
             
                         Spacer()
@@ -178,7 +180,7 @@ struct FilterTabButton: View {
                 }
                 Text(tab.label)
                     .font(.system(size: 14, weight: .medium))
-            }
+        }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)

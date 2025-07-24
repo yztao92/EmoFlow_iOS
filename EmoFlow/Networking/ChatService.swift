@@ -60,12 +60,39 @@ class ChatService {
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeoutInterval
+        
+        // 添加认证token
+        if let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty {
+            request.addValue(token, forHTTPHeaderField: "token")
+            print("🔍 聊天接口 - 添加认证token: \(token.prefix(10))...")
+        } else {
+            print("⚠️ 聊天接口 - 未找到用户token")
+        }
 
         // 2. 构造请求体
         let payload = ChatRequestPayload(
             session_id: sessionID,
             messages: messages
         )
+        
+        // 调试：打印发送给后端的数据
+        print("🔍 前端发送给后端的数据:")
+        print("   Session ID: \(sessionID)")
+        print("   Messages Count: \(messages.count)")
+        for (index, message) in messages.enumerated() {
+            print("   Message \(index + 1): role=\(message.role), content=\(message.content)")
+        }
+        
+        // 将payload转换为字典以便打印
+        let payloadDict: [String: Any] = [
+            "session_id": sessionID,
+            "messages": messages.map { [
+                "role": $0.role,
+                "content": $0.content
+            ] }
+        ]
+        print("   JSON Payload: \(payloadDict)")
+        
         request.httpBody = try JSONEncoder().encode(payload)
 
         // 3. 发起网络请求

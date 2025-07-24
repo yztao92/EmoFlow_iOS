@@ -8,7 +8,7 @@
 import UIKit
 import Foundation
 
-// MARK: - 请求结构
+// MARK: - 请求结构 (与后端ChatRequest保持一致)
 struct JournalRequestPayload: Codable {
     let session_id: String
     let messages: [ChatMessageDTO]
@@ -56,6 +56,14 @@ class JournalService {
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeoutInterval
+        
+        // 添加认证token
+        if let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty {
+            request.addValue(token, forHTTPHeaderField: "token")
+            print("🔍 日记接口 - 添加认证token: \(token.prefix(10))...")
+        } else {
+            print("⚠️ 日记接口 - 未找到用户token")
+        }
 
         // 2. 准备 session_id（identifierForVendor 是 @MainActor 隔离的，需要 await）
         let vendor = await UIDevice.current.identifierForVendor
@@ -66,6 +74,26 @@ class JournalService {
             session_id: sessionID,
             messages: messages
         )
+        
+        // 调试：打印发送给后端的数据
+        print("🔍 日记接口 - 前端发送给后端的数据:")
+        print("   URL: \(url)")
+        print("   Session ID: \(sessionID)")
+        print("   Messages Count: \(messages.count)")
+        for (index, message) in messages.enumerated() {
+            print("   Message \(index + 1): role=\(message.role), content=\(message.content)")
+        }
+        
+        // 将payload转换为字典以便打印
+        let payloadDict: [String: Any] = [
+            "session_id": sessionID,
+            "messages": messages.map { [
+                "role": $0.role,
+                "content": $0.content
+            ] }
+        ]
+        print("   JSON Payload: \(payloadDict)")
+        
         request.httpBody = try JSONEncoder().encode(payload)
 
         // 4. 发送网络请求
@@ -77,18 +105,42 @@ class JournalService {
                 throw JournalServiceError.invalidResponse
             }
             
+            print("🔍 日记接口 - 后端响应:")
+            print("   HTTP Status Code: \(httpResponse.statusCode)")
+            print("   Response Headers: \(httpResponse.allHeaderFields)")
+            
             guard httpResponse.statusCode == 200 else {
+                print("❌ 日记接口 - HTTP错误: \(httpResponse.statusCode)")
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("   Response Body: \(responseString)")
+                }
                 throw JournalServiceError.networkError("HTTP \(httpResponse.statusCode)")
             }
 
             // 6. 解析并返回
+            print("🔍 日记接口 - 解析响应数据:")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("   Raw Response: \(responseString)")
+            }
+            
             let wrapper = try JSONDecoder().decode(JournalResponse.self, from: data)
+            print("   Parsed Journal: \(wrapper.journal)")
+            print("   Parsed Title: \(wrapper.title)")
+            print("   Parsed Status: \(wrapper.status)")
             
             // 检查状态
             guard wrapper.status == "success" else {
+                print("❌ 日记接口 - 状态错误: \(wrapper.status)")
                 throw JournalServiceError.networkError("日记生成失败")
             }
             
+            // 检查内容是否为空或失败
+            if wrapper.journal.isEmpty || wrapper.journal == "生成失败" {
+                print("❌ 日记接口 - 内容生成失败")
+                throw JournalServiceError.networkError("日记内容生成失败")
+            }
+            
+            print("✅ 日记接口 - 成功生成日记")
             return (wrapper.journal, wrapper.title)
             
         } catch let error as JournalServiceError {
