@@ -21,7 +21,7 @@ struct EmotionData {
     static let emotions: [EmotionData] = [
         // 生气
         EmotionData(
-            name: "生气",
+            name: "哼，气死我得了",
             assetName: "Angry",
             color: Color(red: 1, green: 0.52, blue: 0.24),
             backgroundColor: Color(red: 1, green: 0.94, blue: 0.90), // FFFEF5
@@ -32,7 +32,7 @@ struct EmotionData {
         ),
         // 悲伤
         EmotionData(
-            name: "悲伤",
+            name: "唉，哭了",
             assetName: "Sad",
             color: Color(red: 0.55, green: 0.64, blue: 0.93),
             backgroundColor: Color(red: 0.92, green: 0.94, blue: 1), // EBF0FF
@@ -43,7 +43,7 @@ struct EmotionData {
         ),
         // 不开心
         EmotionData(
-            name: "不开心",
+            name: "今天我是不大高兴了",
             assetName: "Unhappy",
             color: Color(red: 0.63, green: 0.91, blue: 0.92),
             backgroundColor: Color(red: 0.93, green: 1, blue: 1), // EDFEFF
@@ -54,7 +54,7 @@ struct EmotionData {
         ),
         // 平和
         EmotionData(
-            name: "平和",
+            name: "无风无浪的一天",
             assetName: "Peaceful",
             color: Color(red: 0.36, green: 0.42, blue: 0.63),
             backgroundColor: Color(red: 0.96, green: 0.98, blue: 1), // F5F9FF
@@ -65,7 +65,7 @@ struct EmotionData {
         ),
         // 开心
         EmotionData(
-            name: "开心",
+            name: "今天蛮开心的",
             assetName: "Happy",
             color: Color(red: 0.99, green: 0.87, blue: 0.44),
             backgroundColor: Color(red: 1, green: 0.98, blue: 0.93), // FFFBED
@@ -76,7 +76,7 @@ struct EmotionData {
         ),
         // 幸福
         EmotionData(
-            name: "幸福",
+            name: "满满的幸福",
             assetName: "Happiness",
             color: Color(red: 0.63, green: 0.91, blue: 0.92),
             backgroundColor: Color(red: 1, green: 0.94, blue: 0.95), // FFF0F3
@@ -88,19 +88,54 @@ struct EmotionData {
     ]
 }
 
+// MARK: - 上滑提示图标组件
+struct SwipeUpIndicator: View {
+    let color: Color
+    @State private var isAnimating = false
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            // 上滑箭头图标
+            Image(systemName: "chevron.up")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(color)
+                .opacity(0.7)
+                .offset(y: isAnimating ? -4 : 0)
+                .animation(
+                    Animation.easeInOut(duration: 1.5)
+                        .repeatForever(autoreverses: true),
+                    value: isAnimating
+                )
+            
+            // 提示文字
+            Text("上滑继续")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(color)
+                .opacity(0.6)
+        }
+        .onAppear {
+            isAnimating = true
+        }
+    }
+}
+
 // MARK: - 问候语组件
 struct GreetingView: View {
     let greeting: String
     let titleColor: Color
     
     var body: some View {
-        HStack {
+        VStack(alignment: .leading, spacing: 16) {
             Text(greeting)
-                .font(.system(size: 32, weight: .semibold))
+                .font(.system(size: 28, weight: .bold))
                 .foregroundColor(titleColor)
-                .padding(.leading, 20)
-            Spacer()
+            
+            Text("你今天过得好吗？")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundColor(titleColor.opacity(0.8))
         }
+        .padding(.leading, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -116,7 +151,7 @@ struct EmotionIconView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(.easeInOut(duration: 0.3), value: emotion.assetName)
         }
-        .frame(height: 219)
+        .frame(height: 240)
     }
 }
 
@@ -126,11 +161,6 @@ struct EmotionCardView: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            // 卡片标题
-            Text("现在的感觉是")
-                .font(.system(size: 32, weight: .heavy))
-                .foregroundColor(emotion.titleColor)
-            
             // 情绪图标
             EmotionIconView(emotion: emotion)
             
@@ -140,7 +170,7 @@ struct EmotionCardView: View {
                 .foregroundColor(emotion.emotionTextColor)
                 .padding(EdgeInsets(top: 4, leading: 0, bottom: 6, trailing: 0))
         }
-        .padding(EdgeInsets(top: 36, leading: 0, bottom: 16, trailing: 0))
+        .padding(EdgeInsets(top: 48, leading: 0, bottom: 24, trailing: 0))
         .frame(maxWidth: .infinity)
         .background(emotion.cardBackgroundColor)
         .cornerRadius(24)
@@ -167,8 +197,8 @@ struct PaginationView: View {
                     }
             }
             Spacer()
-        }
     }
+}
 }
 
 // MARK: - 情绪弹窗组件
@@ -202,7 +232,7 @@ struct EmotionModalView: View {
                             .font(.system(size: 16, weight: .medium))
                         Text("和我聊聊")
                             .font(.system(size: 18, weight: .semibold))
-                    }
+    }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
@@ -222,22 +252,26 @@ struct EmotionModalView: View {
 struct ContentView: View {
     var onTriggerChat: (EmotionType, String) -> Void
     @Binding var emotions: [EmotionType]
-    
+    var onBackgroundColorChange: ((Color) -> Void)? = nil
+
     @State private var currentEmotionIndex: Int = 3 // 默认显示平和
     @State private var showEmotionModal: Bool = false // 控制弹窗显示
     
     private var currentEmotion: EmotionData {
         EmotionData.emotions[currentEmotionIndex]
     }
-    
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 // 问候语
                 GreetingView(greeting: greeting, titleColor: currentEmotion.titleColor)
-                
+                    .padding(.top, 20)
+
+                // 固定间距
                 Spacer()
-                
+                    .frame(height: 64)
+
                 VStack(spacing: 16) {
                     // 情绪卡片
                     EmotionCardView(emotion: currentEmotion)
@@ -257,14 +291,23 @@ struct ContentView: View {
                         }
                     )
                 }
-                
+
                 Spacer()
+
+                // 上滑提示图标
+                SwipeUpIndicator(color: currentEmotion.titleColor)
             }
-            .padding(EdgeInsets(top: 20, leading: 20, bottom: 16, trailing: 20))
+            .padding(EdgeInsets(top: 0, leading: 20, bottom: 16, trailing: 20))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(currentEmotion.backgroundColor)
-        .gesture(
+        .onChange(of: currentEmotion.backgroundColor) { _, newColor in
+            onBackgroundColorChange?(newColor)
+        }
+        .onAppear {
+            onBackgroundColorChange?(currentEmotion.backgroundColor)
+        }
+                        .gesture(
             DragGesture()
                 .onEnded { value in
                     let threshold: CGFloat = 50
@@ -305,7 +348,7 @@ struct ContentView: View {
             )
         }
     }
-    
+
     // MARK: - 私有方法
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -320,7 +363,10 @@ struct ContentView: View {
             timeGreeting = "晚上好"
         }
         
-        return "\(timeGreeting), Nick"
+        // 从UserDefaults获取真实用户名
+        let userName = UserDefaults.standard.string(forKey: "userName") ?? "用户"
+        
+        return "\(timeGreeting), \(userName)～"
     }
     
     private func switchToNextEmotion() {
@@ -346,22 +392,22 @@ struct ContentView: View {
     // 转换EmotionData到EmotionType
     private func convertEmotionDataToEmotionType(_ emotion: EmotionData) -> EmotionType {
         switch emotion.name {
-        case "生气":
+        case "哼，气死我得了":
             return .angry
-        case "悲伤":
+        case "唉，哭了":
             return .sad
-        case "不开心":
+        case "今天我是不大高兴了":
             return .unhappy
-        case "平和":
+        case "无风无浪的一天":
             return .peaceful
-        case "开心":
+        case "今天蛮开心的":
             return .happy
-        case "幸福":
+        case "满满的幸福":
             return .happiness
         default:
             return .happy
-        }
     }
+}
 }
 
 // MARK: - 预览
@@ -369,7 +415,8 @@ struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView(
             onTriggerChat: { _, _ in },
-            emotions: .constant([])
+            emotions: .constant([]),
+            onBackgroundColorChange: { _ in }
         )
     }
 }

@@ -6,7 +6,7 @@ struct AppLoginView: View {
     @State private var isLoading: Bool = false
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
-    
+
     var body: some View {
         ZStack {
             // 背景渐变
@@ -24,7 +24,7 @@ struct AppLoginView: View {
                 Spacer()
                 
                 // Logo和标题
-                VStack(spacing: 20) {
+        VStack(spacing: 20) {
                     Image("AIicon") // 使用应用图标
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -41,8 +41,8 @@ struct AppLoginView: View {
                         .multilineTextAlignment(.center)
                 }
                 
-                Spacer()
-                
+            Spacer()
+
                 // 登录按钮
                 VStack(spacing: 20) {
                     // 苹果登录按钮
@@ -111,7 +111,7 @@ struct AppLoginView: View {
     private func handleSignInResult(_ result: Result<ASAuthorization, Error>) {
         isLoading = true
         
-        switch result {
+                switch result {
         case .success(let authorization):
             if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
                 // 获取Apple登录凭证
@@ -139,14 +139,14 @@ struct AppLoginView: View {
                     fullName: fullName,
                     email: email
                 )
-            }
+                    }
             
-        case .failure(let error):
+                case .failure(let error):
             isLoading = false
             errorMessage = error.localizedDescription
             showError = true
-        }
-    }
+                }
+            }
     
     // 与后端验证
     private func verifyWithBackend(
@@ -177,7 +177,7 @@ struct AppLoginView: View {
             showError = true
             return
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -188,7 +188,7 @@ struct AppLoginView: View {
             isLoading = false
             errorMessage = "数据编码失败"
             showError = true
-            return
+                        return
         }
         
         URLSession.shared.dataTask(with: request) { data, response, error in
@@ -228,7 +228,12 @@ struct AppLoginView: View {
                         
                         // 登录成功
                         self.isLoggedIn = true
-                    } else {
+                        
+                        // 同步日记列表
+                        Task {
+                            await JournalListService.shared.syncJournals()
+                        }
+                } else {
                         self.errorMessage = "登录验证失败"
                         self.showError = true
                     }

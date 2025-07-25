@@ -12,6 +12,7 @@ import Foundation
 struct JournalRequestPayload: Codable {
     let session_id: String
     let messages: [ChatMessageDTO]
+    let emotion: String?  // 添加emotion字段
 }
 
 // MARK: - 响应结构
@@ -43,7 +44,7 @@ class JournalService {
     static let shared = JournalService()
     private init() {}
 
-    private let url = URL(string: "http://106.14.220.115:8000/journal/generate")!
+    private let url = URL(string: "https://emoflow.net.cn/journal/generate")!
     private let timeoutInterval: TimeInterval = 30.0
 
     /// 生成心情日记
@@ -69,10 +70,11 @@ class JournalService {
         let vendor = await UIDevice.current.identifierForVendor
         let sessionID = vendor?.uuidString ?? UUID().uuidString
 
-        // 3. 构造请求体（移除 emotions 字段）
+        // 3. 构造请求体
         let payload = JournalRequestPayload(
             session_id: sessionID,
-            messages: messages
+            messages: messages,
+            emotion: emotions.first?.rawValue  // 取第一个emotion
         )
         
         // 调试：打印发送给后端的数据
@@ -90,7 +92,8 @@ class JournalService {
             "messages": messages.map { [
                 "role": $0.role,
                 "content": $0.content
-            ] }
+            ] },
+            "emotion": emotions.first?.rawValue ?? ""
         ]
         print("   JSON Payload: \(payloadDict)")
         
@@ -122,7 +125,7 @@ class JournalService {
             if let responseString = String(data: data, encoding: .utf8) {
                 print("   Raw Response: \(responseString)")
             }
-            
+
             let wrapper = try JSONDecoder().decode(JournalResponse.self, from: data)
             print("   Parsed Journal: \(wrapper.journal)")
             print("   Parsed Title: \(wrapper.title)")

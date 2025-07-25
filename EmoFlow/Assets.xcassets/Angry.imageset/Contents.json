@@ -1,17 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "Angry 3_1x.png",
+      "filename" : "Angry_1x.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "Angry 3_2x.png",
+      "filename" : "Angry_2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "Angry 3_3x.png",
+      "filename" : "Angry_3x.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

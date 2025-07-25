@@ -302,6 +302,10 @@ struct ChatView: View {
                 let newRecord = ChatRecord(id: UUID(), date: Date(), messages: messages, summary: journal, emotion: emotion, title: title)
                 chatRecords.append(newRecord)
                 RecordManager.saveAll(chatRecords)
+                
+                // 同步日记列表到后端
+                await JournalListService.shared.syncJournals()
+                
                 DispatchQueue.main.async {
                     if !didTimeout {
                         selectedTab = 1

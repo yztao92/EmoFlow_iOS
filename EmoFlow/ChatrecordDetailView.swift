@@ -19,6 +19,7 @@ struct ChatrecordDetailView: View {
     @State private var editedTitle: String = ""  // 新增：编辑标题
     @State private var showShareSheet = false
     @State private var shareImage: UIImage? = nil
+    @State private var isLoadingDetail = false
     // 用于截图的ID
     private let contentCaptureID = "noteContentCapture"
 
@@ -165,6 +166,15 @@ struct ChatrecordDetailView: View {
                 ShareSheet(activityItems: [image])
             }
         }
+        .onAppear {
+            editedSummary = record.summary
+            editedTitle = record.title ?? ""
+            
+            // 检查是否需要获取详情
+            if let backendId = record.backendId {
+                loadJournalDetailIfNeeded(backendId: backendId)
+            }
+        }
         .sheet(isPresented: $showEditSheet) {
             NavigationView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -223,11 +233,38 @@ struct ChatrecordDetailView: View {
             }
         }
     }
+    
+    // 加载日记详情（如果需要）
+    private func loadJournalDetailIfNeeded(backendId: Int) {
+        // 检查是否已有详情缓存
+        if !JournalDetailService.shared.isDetailCached(journalId: backendId) {
+            isLoadingDetail = true
+            
+            Task {
+                do {
+                    let detailedRecord = try await JournalDetailService.shared.fetchAndCacheJournalDetail(journalId: backendId)
+                    await MainActor.run {
+                        // 更新当前记录
+                        record.messages = detailedRecord.messages
+                        record.summary = detailedRecord.summary
+                        record.title = detailedRecord.title
+                        record.emotion = detailedRecord.emotion
+                        isLoadingDetail = false
+                    }
+                } catch {
+                    await MainActor.run {
+                        isLoadingDetail = false
+                        print("❌ 加载日记详情失败: \(error)")
+                    }
+                }
+            }
+        }
+    }
 
     // 截图方法
     private func captureNoteContent() {
-        let window = UIApplication.shared.windows.first { $0.isKeyWindow }
-        guard let rootVC = window?.rootViewController else { return }
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              windowScene.windows.first(where: { $0.isKeyWindow }) != nil else { return }
         let hosting = UIHostingController(rootView:
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {

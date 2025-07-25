@@ -46,7 +46,7 @@ class ChatService {
     static let shared = ChatService()
     private init() {}
 
-    private let url = URL(string: "http://106.14.220.115:8000/chat")!
+    private let url = URL(string: "https://emoflow.net.cn/chat")!
     private let timeoutInterval: TimeInterval = 30.0
 
     /// 发送聊天请求

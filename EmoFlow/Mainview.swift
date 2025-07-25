@@ -16,6 +16,7 @@ struct MainView: View {
     @State private var selectedRecord: ChatRecord? = nil
     @State private var records: [ChatRecord] = RecordManager.loadAll()
     @State private var showLogoutAlert = false
+    @State private var currentBackgroundColor: Color = Color(.systemGroupedBackground)
     @Namespace private var tabAnim
     
     private let tabIcons = [
@@ -43,7 +44,10 @@ struct MainView: View {
                                     self.chatActive = true
                                 }
                             },
-                            emotions: $emotions
+                            emotions: $emotions,
+                            onBackgroundColorChange: { color in
+                                self.currentBackgroundColor = color
+                            }
                         )
                         .transition(.opacity)
                     }
@@ -59,24 +63,51 @@ struct MainView: View {
                 .animation(.easeInOut(duration: 0.25), value: selectedTab)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+                // 分割线
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: 0.5)
+                
                 // 自定义TabBar
-                HStack {
-                    ForEach(0..<tabIcons.count, id: \ .self) { idx in
-                        Spacer()
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                selectedTab = idx
+                Group {
+                    if selectedTab == 0 {
+                        HStack {
+                            ForEach(0..<tabIcons.count, id: \ .self) { idx in
+                                Spacer()
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.25)) {
+                                        selectedTab = idx
+                                    }
+                                }) {
+                                    Image(selectedTab == idx ? tabIcons[idx].1 : tabIcons[idx].0)
+                                        .resizable()
+                                        .frame(width: 28, height: 28)
+                                }
+                                Spacer()
                             }
-                        }) {
-                            Image(selectedTab == idx ? tabIcons[idx].1 : tabIcons[idx].0)
-                                .resizable()
-                                .frame(width: 28, height: 28)
-                }
-                        Spacer()
+                        }
+                        .frame(height: 56)
+                        .background(currentBackgroundColor)
+                    } else {
+                        HStack {
+                            ForEach(0..<tabIcons.count, id: \ .self) { idx in
+                                Spacer()
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.25)) {
+                                        selectedTab = idx
+                                    }
+                                }) {
+                                    Image(selectedTab == idx ? tabIcons[idx].1 : tabIcons[idx].0)
+                                        .resizable()
+                                        .frame(width: 28, height: 28)
+                                }
+                                Spacer()
+                            }
+                        }
+                        .frame(height: 56)
+                        .background(.ultraThinMaterial)
                     }
                 }
-                .frame(height: 56)
-                .background(.ultraThinMaterial)
             }
             .ignoresSafeArea(.keyboard)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())

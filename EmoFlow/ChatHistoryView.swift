@@ -102,6 +102,9 @@ struct ChatHistoryView: View {
             diaryList
                 .navigationTitle("心情日记")
                 .navigationBarTitleDisplayMode(.inline)
+                .refreshable {
+                    await refreshJournals()
+                }
         }
         .onAppear { loadRecords() }
     }
@@ -110,12 +113,44 @@ struct ChatHistoryView: View {
         records = RecordManager.loadAll().sorted { $0.date > $1.date }
     }
     
+    private func refreshJournals() async {
+        do {
+            let newJournals = try await JournalListService.shared.fetchJournals(limit: 100, offset: 0)
+            RecordManager.saveAll(newJournals)
+            await MainActor.run {
+                records = newJournals.sorted { $0.date > $1.date }
+            }
+            print("✅ 日记列表刷新成功")
+        } catch {
+            print("❌ 日记列表刷新失败: \(error)")
+        }
+    }
+    
     private func delete(_ record: ChatRecord) {
+        // 先删除本地记录
         withAnimation {
         RecordManager.delete(record)
         records.removeAll { $0.id == record.id }
     }
-}
+        
+        // 调用后端删除API
+        if let backendId = record.backendId {
+            Task {
+                do {
+                    let success = try await JournalDeleteService.shared.deleteJournal(journalId: backendId)
+                    if success {
+                        print("✅ 后端日记删除成功")
+                        // 刷新日记列表
+                        await refreshJournals()
+                    }
+                } catch {
+                    print("❌ 后端日记删除失败: \(error)")
+                }
+            }
+        } else {
+            print("⚠️ 无法删除后端日记：缺少backendId")
+        }
+    }
 }
 
 // DiaryRowView 增加 isFirst/isLast 参数，首尾有圆角和阴影，中间无圆角无阴影
@@ -181,11 +216,11 @@ struct FilterTabButton: View {
                 Text(tab.label)
                     .font(.system(size: 14, weight: .medium))
         }
-            .padding(.horizontal, 12)
+        .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
             .foregroundColor(isSelected ? .blue : .gray)
-            .cornerRadius(16)
+        .cornerRadius(16)
         }
     }
 }

@@ -9,9 +9,9 @@ struct EmoFlowApp: App {
         WindowGroup {
             Group {
                 if isLoggedIn {
-                    MainView()
-                        .environment(\.managedObjectContext,
-                                     persistenceController.container.viewContext)
+            MainView()
+                .environment(\.managedObjectContext,
+                             persistenceController.container.viewContext)
                         .onReceive(NotificationCenter.default.publisher(for: .logout)) { _ in
                             isLoggedIn = false
                         }
