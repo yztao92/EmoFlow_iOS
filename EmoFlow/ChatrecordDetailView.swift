@@ -20,12 +20,20 @@ struct ChatrecordDetailView: View {
     @State private var showShareSheet = false
     @State private var shareImage: UIImage? = nil
     @State private var isLoadingDetail = false
+    @State private var useCustomBackground: Bool = true // 控制是否使用自定义背景
+    @State private var backgroundStyle: BackgroundStyle = .grid // 背景样式
     // 用于截图的ID
     private let contentCaptureID = "noteContentCapture"
 
     var body: some View {
         ZStack {
-            Color(.systemBackground).ignoresSafeArea()
+            // 背景
+            CustomBackgroundView(
+                style: backgroundStyle,
+                emotionColor: getEmotionBackgroundColor()
+            )
+            .ignoresSafeArea()
+            
             VStack(spacing: 0) {
                 // 移除内容区的主标题
                 TabView(selection: $selectedPage) {
@@ -58,8 +66,6 @@ struct ChatrecordDetailView: View {
                             }
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(16)
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
                     }
@@ -109,39 +115,39 @@ struct ChatrecordDetailView: View {
                 }
                 .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
 
-                // 按钮放在分页指示器上方
-                if selectedPage == 0 {
-                    HStack(spacing: 24) {
-                        Button(action: {
-                            captureNoteContent()
-                        }) {
-                            HStack {
-                                Image(systemName: "square.and.arrow.up")
-                                Text("分享")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(.systemGroupedBackground))
-                            .cornerRadius(12)
-                        }
-                        Button(action: {
-                            editedSummary = record.summary
-                            editedTitle = record.title ?? "今日心情"  // 设置标题初始值
-                            showEditSheet = true
-                        }) {
-                            HStack {
-                                Image(systemName: "pencil")
-                                Text("编辑")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color(.systemGroupedBackground))
-                            .cornerRadius(12)
-                        }
-                    }
-                    .padding(.horizontal, 32)
-                    .padding(.top, 8)
-                }
+                // 按钮暂时隐藏
+                // if selectedPage == 0 {
+                //     HStack(spacing: 24) {
+                //         Button(action: {
+                //             captureNoteContent()
+                //         }) {
+                //             HStack {
+                //                 Image(systemName: "square.and.arrow.up")
+                //                 Text("分享")
+                //             }
+                //             .frame(maxWidth: .infinity)
+                //             .padding()
+                //             .background(Color(.systemGroupedBackground))
+                //             .cornerRadius(12)
+                //         }
+                //         Button(action: {
+                //             editedSummary = record.summary
+                //             editedTitle = record.title ?? "今日心情"  // 设置标题初始值
+                //             showEditSheet = true
+                //         }) {
+                //             HStack {
+                //                 Image(systemName: "pencil")
+                //                 Text("编辑")
+                //             }
+                //             .frame(maxWidth: .infinity)
+                //             .padding()
+                //             .background(Color(.systemGroupedBackground))
+                //             .cornerRadius(12)
+                //         }
+                //     }
+                //     .padding(.horizontal, 32)
+                //     .padding(.top, 8)
+                // }
                 // 点状分页指示器始终在最底部
                 HStack(spacing: 8) {
                     ForEach(0..<2) { idx in
@@ -368,4 +374,160 @@ struct ChatMessageRow: View {
 }
 
 // 删除了TextBubbleView的重复定义，直接复用ChatMessagesView.swift中的TextBubbleView
+
+// MARK: - 背景样式枚举
+enum BackgroundStyle: String, CaseIterable {
+    case grid = "网格"
+    case dots = "点阵"
+    case lines = "横线"
+    case gradient = "渐变"
+    case solid = "纯色"
+}
+
+// MARK: - 自定义背景视图
+struct CustomBackgroundView: View {
+    let style: BackgroundStyle
+    let emotionColor: Color?
+    
+    init(style: BackgroundStyle, emotionColor: Color? = nil) {
+        self.style = style
+        self.emotionColor = emotionColor
+    }
+    
+    var body: some View {
+        ZStack {
+            // 基础背景色
+            if let emotionColor = emotionColor {
+                emotionColor.opacity(0.3) // 降低情绪背景色的透明度
+            } else {
+                Color(.systemGroupedBackground)
+            }
+            
+            // 网格始终显示，叠加在背景色上
+            GridPatternView()
+                .opacity(1.0) // 增加透明度，让网格更明显
+        }
+    }
+}
+
+// 网格线背景
+struct GridPatternView: View {
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                let width = geometry.size.width
+                let height = geometry.size.height
+                let gridSize: CGFloat = 20
+                
+                // 绘制垂直线
+                for x in stride(from: 0, through: width, by: gridSize) {
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: height))
+                }
+                
+                // 绘制水平线
+                for y in stride(from: 0, through: height, by: gridSize) {
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: width, y: y))
+                }
+            }
+            .stroke(
+                Color.gray.opacity(0.2), 
+                lineWidth: 0.8
+            )
+        }
+    }
+}
+
+// 点阵背景
+struct DotsPatternView: View {
+    let emotionColor: Color?
+    
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                let width = geometry.size.width
+                let height = geometry.size.height
+                let dotSpacing: CGFloat = 25
+                let dotRadius: CGFloat = 1
+                
+                for x in stride(from: dotSpacing, through: width - dotSpacing, by: dotSpacing) {
+                    for y in stride(from: dotSpacing, through: height - dotSpacing, by: dotSpacing) {
+                        let rect = CGRect(x: x - dotRadius, y: y - dotRadius, width: dotRadius * 2, height: dotRadius * 2)
+                        path.addEllipse(in: rect)
+                    }
+                }
+            }
+            .fill(emotionColor?.opacity(0.4) ?? Color.gray.opacity(0.5))
+        }
+    }
+}
+
+// 横线背景
+struct LinesPatternView: View {
+    let emotionColor: Color?
+    
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                let width = geometry.size.width
+                let height = geometry.size.height
+                let lineSpacing: CGFloat = 30
+                
+                for y in stride(from: lineSpacing, through: height, by: lineSpacing) {
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: width, y: y))
+                }
+            }
+            .stroke(
+                Color.gray.opacity(0.2), 
+                lineWidth: 0.8
+            )
+        }
+    }
+}
+
+// 渐变背景
+struct GradientBackgroundView: View {
+    let emotionColor: Color?
+    
+    var body: some View {
+        if let emotionColor = emotionColor {
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    emotionColor,
+                    emotionColor.opacity(0.8),
+                    emotionColor
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(.systemGroupedBackground),
+                    Color(.systemGroupedBackground).opacity(0.8),
+                    Color(.systemGroupedBackground)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+}
+
+// MARK: - 背景颜色获取方法
+extension ChatrecordDetailView {
+    // 根据日记情绪获取对应的背景颜色
+    private func getEmotionBackgroundColor() -> Color? {
+        guard let emotion = record.emotion else { return nil }
+        
+        // 从 EmotionData 中查找对应的背景颜色
+        if let emotionData = EmotionData.emotions.first(where: { $0.assetName == emotion.iconName }) {
+            return emotionData.backgroundColor
+        }
+        
+        return nil
+    }
+}
 

@@ -117,6 +117,15 @@ class JournalListService {
             print("   Total: \(wrapper.total)")
             
             // 5. 转换为ChatRecord格式
+            print("🔍 日记列表接口 - 开始转换日记数据:")
+            for (index, journalData) in wrapper.journals.enumerated() {
+                print("   日记 \(index + 1):")
+                print("     ID: \(journalData.id)")
+                print("     标题: \(journalData.title)")
+                print("     创建时间: \(journalData.created_at ?? "null")")
+                print("     更新时间: \(journalData.updated_at ?? "null")")
+            }
+            
             let chatRecords = wrapper.journals.compactMap { journalData -> ChatRecord? in
                 return convertJournalDataToChatRecord(journalData)
             }
@@ -153,9 +162,12 @@ class JournalListService {
             ChatMessage(role: dto.role == "user" ? .user : .assistant, content: dto.content)
         }
         
-        // 转换时间格式
-        let dateFormatter = ISO8601DateFormatter()
-        let date = journalData.created_at.flatMap { dateFormatter.date(from: $0) } ?? Date()
+        // 转换时间格式 - 使用更新时间
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+        
+        let date = journalData.updated_at.flatMap { dateFormatter.date(from: $0) } ?? Date()
+        print("🔍 日记时间转换: \(journalData.updated_at ?? "null") -> \(date)")
         
         // 转换情绪类型（从标题或内容中推断）
         let emotion = inferEmotionFromContent(journalData.content)

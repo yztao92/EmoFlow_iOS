@@ -161,25 +161,26 @@ struct DiaryRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             // 情绪图标
-                    Image((record.emotion?.iconName) ?? "Happy")
-                        .resizable()
+            Image((record.emotion?.iconName) ?? "Happy")
+                .resizable()
                 .frame(width: 32, height: 32)
                 
             // 内容区域
             VStack(alignment: .leading, spacing: 4) {
                 Text(record.title ?? (record.summary.isEmpty ? "Recordings" : record.summary))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
                 
                 Text(record.date, style: .time)
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
-                }
-            .padding(.vertical, 8)
+            }
             
-                        Spacer()
-                    }
+            Spacer()
+        }
+        .contentShape(Rectangle()) // 确保整个区域都可以点击
+        .frame(maxWidth: .infinity) // 确保占满整个宽度
     }
 }
 

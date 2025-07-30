@@ -266,7 +266,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 // 问候语
                 GreetingView(greeting: greeting, titleColor: currentEmotion.titleColor)
-                    .padding(.top, 20)
+                    .padding(.top, 48)
 
                 // 固定间距
                 Spacer()
@@ -297,7 +297,7 @@ struct ContentView: View {
                 // 上滑提示图标
                 SwipeUpIndicator(color: currentEmotion.titleColor)
             }
-            .padding(EdgeInsets(top: 0, leading: 20, bottom: 16, trailing: 20))
+            .padding(EdgeInsets(top: 0, leading: 20, bottom: 20, trailing: 20))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(currentEmotion.backgroundColor)
