@@ -81,13 +81,7 @@ struct MainView: View {
             .ignoresSafeArea(.keyboard)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             
-            // 导航到日记详情
-            .navigationDestination(item: $selectedRecord) { record in
-                ChatrecordDetailView(record: record, onSave: { newSummary in
-                    record.summary = newSummary
-                    RecordManager.saveAll(records)
-                })
-            }
+            // 日记详情导航现在在ChatHistoryView内部处理
             
             // 导航到聊天页面
             .navigationDestination(isPresented: $chatActive) {

@@ -261,6 +261,7 @@ struct EmotionSelectionArea: View {
             .clipped()
         }
         .frame(height: 280)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8, blendDuration: 0), value: currentIndex)
     }
 }
 
@@ -324,6 +325,10 @@ struct ContentView: View {
             }
             .gesture(
                 DragGesture()
+                    .onChanged { value in
+                        // 手势识别，但不触发震动反馈
+                        // 避免干扰用户的情绪体验
+                    }
                     .onEnded { value in
                         let horizontalThreshold: CGFloat = 80
                         let verticalThreshold: CGFloat = 60
@@ -408,22 +413,176 @@ struct ContentView: View {
     }
     
     private func switchToNextEmotion() {
-        // 触发震动反馈
-        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-        impactFeedback.impactOccurred()
-        
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8, blendDuration: 0)) {
             currentEmotionIndex = (currentEmotionIndex + 1) % EmotionData.emotions.count
+        }
+        
+        // 动画完成后触发情绪震动反馈
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            triggerEmotionHaptic()
         }
     }
     
     private func switchToPreviousEmotion() {
-        // 触发震动反馈
-        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-        impactFeedback.impactOccurred()
-        
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8, blendDuration: 0)) {
             currentEmotionIndex = (currentEmotionIndex - 1 + EmotionData.emotions.count) % EmotionData.emotions.count
+        }
+        
+        // 动画完成后触发情绪震动反馈
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            triggerEmotionHaptic()
+        }
+    }
+    
+    // 根据情绪类型触发不同的震动模式
+    private func triggerEmotionHaptic() {
+        let emotionType = convertEmotionDataToEmotionType(currentEmotion)
+        
+        switch emotionType {
+        case .angry:
+            // 愤怒：节奏密集的重击感，有冲撞感 - 1.2秒
+            // 模拟：捶桌或心跳飙升的感觉
+            let heavyFeedback = UIImpactFeedbackGenerator(style: .heavy)
+            heavyFeedback.impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                heavyFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                heavyFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                heavyFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                heavyFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                heavyFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                heavyFeedback.impactOccurred()
+            }
+            
+        case .sad:
+            // 悲伤：一段慢沉的拖尾，像低声叹息 - 2.0秒
+            // 模拟：心脏隐隐作痛，或者一阵忧郁
+            let mediumFeedback = UIImpactFeedbackGenerator(style: .medium)
+            let lightFeedback = UIImpactFeedbackGenerator(style: .light)
+            mediumFeedback.impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                mediumFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                lightFeedback.impactOccurred()
+            }
+            
+        case .unhappy:
+            // 不开心：情绪下沉的顿感 - 1.5秒
+            // 模拟：一阵失落或压抑的触感
+            let mediumFeedback = UIImpactFeedbackGenerator(style: .medium)
+            let lightFeedback = UIImpactFeedbackGenerator(style: .light)
+            mediumFeedback.impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                mediumFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                mediumFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                lightFeedback.impactOccurred()
+            }
+            
+        case .peaceful:
+            // 平和：像温柔的波浪或呼吸节奏 - 2.0秒
+            // 模拟：深呼吸、平静水面
+            let softFeedback = UIImpactFeedbackGenerator(style: .soft)
+            let lightFeedback = UIImpactFeedbackGenerator(style: .light)
+            softFeedback.impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                softFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                softFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                softFeedback.impactOccurred()
+            }
+            
+        case .happy:
+            // 开心：欢快跃动，像蹦跳的小球 - 1.2秒
+            // 模拟：跳跃感、轻盈活泼
+            let lightFeedback = UIImpactFeedbackGenerator(style: .light)
+            lightFeedback.impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                lightFeedback.impactOccurred()
+            }
+            
+        case .happiness:
+            // 幸福：温暖、慢慢流淌的情绪波 - 2.0秒
+            // 模拟：被幸福包裹的稳定触感
+            let lightFeedback = UIImpactFeedbackGenerator(style: .light)
+            let mediumFeedback = UIImpactFeedbackGenerator(style: .medium)
+            lightFeedback.impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                mediumFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                mediumFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                mediumFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                lightFeedback.impactOccurred()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                lightFeedback.impactOccurred()
+            }
         }
     }
     

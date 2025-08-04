@@ -8,6 +8,12 @@ struct JournalEditView: View {
     @State private var isSaving = false
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
+    @State private var selectedTextAlignment: TextAlignment = .center
+    @State private var isBold = false
+    @State private var isItalic = false
+
+    @State private var showImagePicker = false
+    @State private var isTextEditorFocused = false
     
     // 创建成功后的回调
     var onJournalCreated: ((Int) -> Void)? = nil
@@ -19,7 +25,7 @@ struct JournalEditView: View {
     var editJournalId: Int? = nil
     
     // 情绪选项
-    private let emotionOptions: [EmotionType] = [.happy, .happiness, .unhappy, .sad, .peaceful, .angry]
+    private let emotionOptions: [EmotionType] = [.angry, .sad, .unhappy, .peaceful, .happy, .happiness]
     
     init(initialEmotion: EmotionType = .peaceful, onJournalCreated: ((Int) -> Void)? = nil, isEditMode: Bool = false, editJournalId: Int? = nil, onJournalUpdated: ((Int) -> Void)? = nil, initialTitle: String = "", initialContent: String = "") {
         self._selectedEmotion = State(initialValue: initialEmotion)
@@ -31,85 +37,244 @@ struct JournalEditView: View {
         self.onJournalUpdated = onJournalUpdated
     }
     
+    // 计算文本高度的辅助函数
+    private func calculateTextHeight(_ text: String, fontSize: CGFloat = 16) -> CGFloat {
+        let font = UIFont.systemFont(ofSize: fontSize, weight: .regular)
+        let attributes = [NSAttributedString.Key.font: font]
+        let size = CGSize(width: UIScreen.main.bounds.width - 64, height: .infinity) // 减去左右padding
+        let boundingRect = text.boundingRect(with: size, options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: attributes, context: nil)
+        return max(boundingRect.height + 40, 100) // 最小高度100，加上一些padding
+    }
+    
+
+    
+    // 获取对齐图标
+    private func getAlignmentIcon() -> String {
+        switch selectedTextAlignment {
+        case .leading:
+            return "text.alignleft"
+        case .center:
+            return "text.aligncenter"
+        case .trailing:
+            return "text.alignright"
+        }
+    }
+    
     var body: some View {
-        VStack(spacing: 0) {
-            // 情绪选择器
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(emotionOptions, id: \.self) { emotion in
-                        EmotionOptionView(
-                            emotion: emotion,
-                            isSelected: selectedEmotion == emotion
-                        ) {
-                            selectedEmotion = emotion
-                        }
+        ZStack {
+            // 背景
+            CustomBackgroundView(
+                style: BackgroundStyle.grid,
+                emotionColor: getEmotionBackgroundColor()
+            )
+            .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // 编辑区域 - 直接在页面内编辑
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                                                    // 情绪图标 - 页面居中显示，可点击切换
+                            VStack(spacing: 16) {
+                                Button(action: {
+                                    // 点击切换情绪
+                                    switch selectedEmotion {
+                                    case .angry:
+                                        selectedEmotion = .sad
+                                    case .sad:
+                                        selectedEmotion = .unhappy
+                                    case .unhappy:
+                                        selectedEmotion = .peaceful
+                                    case .peaceful:
+                                        selectedEmotion = .happy
+                                    case .happy:
+                                        selectedEmotion = .happiness
+                                    case .happiness:
+                                        selectedEmotion = .angry
+                                    }
+                                }) {
+                                    Image(selectedEmotion.iconName)
+                                        .resizable()
+                                        .frame(width: 80, height: 80)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                            .frame(maxWidth: .infinity, alignment: .center) // 确保整个VStack居中
+                            .padding(.horizontal, 16)
+                            .padding(.top, 40) // 增加顶部距离
+                        
+                                                    // 标题输入区域 - 直接在页面内编辑，居中
+                            TextField("给这段心情起个标题...", text: $title)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.primary)
+                                .multilineTextAlignment(.center) // 标题居中
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(Color.clear) // 透明背景
+                                .padding(.horizontal, 16)
+                                .frame(maxWidth: .infinity, alignment: .center) // 确保标题居中
+                        
+                                                    // 内容输入区域 - 直接在页面内编辑，居中
+                            ZStack(alignment: .bottomTrailing) {
+                                TextEditor(text: $content)
+                                    .font(.system(size: 16, weight: isBold ? .bold : .regular))
+                                    .foregroundColor(.primary) // 移除颜色选择，使用默认颜色
+                                    .multilineTextAlignment(selectedTextAlignment) // 动态对齐
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(Color.clear) // 透明背景
+                                    .frame(maxWidth: .infinity, alignment: .center) // 确保内容居中
+                                    .frame(height: calculateTextHeight(content)) // 根据内容计算高度
+                                    .scrollContentBackground(.hidden) // 移除TextEditor的默认背景
+                                    .onTapGesture {
+                                        isTextEditorFocused = true
+                                    }
+                                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                                        isTextEditorFocused = true
+                                    }
+                                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                                        isTextEditorFocused = false
+                                    }
+                                
+                                // 日期显示在右下角
+                                VStack(alignment: .trailing) {
+                                    Spacer()
+                                    HStack {
+                                        Spacer()
+                                        Text("\(getDayOfWeek()) \(getFormattedDate())")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                            .padding(.trailing, 20)
+                                            .padding(.bottom, 8)
+                                    }
+                                }
+                            }
+                            
+                            // 功能工具栏 - 只在输入框激活时显示
+                            if isTextEditorFocused {
+                                HStack(spacing: 16) {
+                                    // 对齐方式按钮
+                                    Button(action: {
+                                        // 切换文本对齐方式
+                                        switch selectedTextAlignment {
+                                        case .leading:
+                                            selectedTextAlignment = .center
+                                        case .center:
+                                            selectedTextAlignment = .trailing
+                                        case .trailing:
+                                            selectedTextAlignment = .leading
+                                        }
+                                    }) {
+                                        Image(systemName: getAlignmentIcon())
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.primary)
+                                            .frame(width: 32, height: 32)
+                                            .background(Color.gray.opacity(0.1))
+                                            .cornerRadius(8)
+                                    }
+                                    
+                                    // 加粗按钮
+                                    Button(action: {
+                                        isBold.toggle()
+                                    }) {
+                                        Image(systemName: "bold")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(isBold ? .blue : .primary)
+                                            .frame(width: 32, height: 32)
+                                            .background(isBold ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+                                            .cornerRadius(8)
+                                    }
+                                    
+                                    // 斜体按钮
+                                    Button(action: {
+                                        isItalic.toggle()
+                                    }) {
+                                        Image(systemName: "italic")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(isItalic ? .blue : .primary)
+                                            .frame(width: 32, height: 32)
+                                            .background(isItalic ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
+                                            .cornerRadius(8)
+                                    }
+                                    
+                                    // 图片上传按钮
+                                    Button(action: {
+                                        showImagePicker = true
+                                    }) {
+                                        Image(systemName: "photo")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.primary)
+                                            .frame(width: 32, height: 32)
+                                            .background(Color.gray.opacity(0.1))
+                                            .cornerRadius(8)
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.top, 8)
+                                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                            }
+                        
+                        Spacer(minLength: 100)
                     }
                 }
-                .padding(.horizontal, 20)
             }
-            .padding(.vertical, 16)
-            .background(Color(.systemGray6))
-            
-            // 编辑区域
-            ScrollView {
-                VStack(spacing: 20) {
-                    // 标题输入
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("标题")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                        
-                        TextField("给这段心情起个标题...", text: $title)
-                            .font(.system(size: 18, weight: .medium))
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
+        }
+        .navigationBarHidden(true) // 隐藏系统导航栏
+        .overlay(
+            // 自定义导航栏
+            VStack {
+                HStack {
+                    Button("取消") {
+                        dismiss()
                     }
+                    .foregroundColor(.blue)
                     
-                    // 内容输入
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("内容")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                        
-                        TextEditor(text: $content)
-                            .font(.system(size: 16, weight: .regular))
-                            .frame(minHeight: 200)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color(.systemGray4), lineWidth: 1)
-                            )
+                    Spacer()
+                    
+                    Spacer()
+                    
+                    Button("保存") {
+                        saveJournal()
                     }
+                    .foregroundColor(.blue)
+                    .disabled(title.isEmpty || content.isEmpty || isSaving)
                 }
-                .padding(20)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                
+                Spacer()
             }
-        }
-        .navigationTitle(isEditMode ? "编辑心情" : "记录心情")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button("取消") {
-                    dismiss()
-                }
-                .foregroundColor(.blue)
-            }
-            
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("保存") {
-                    saveJournal()
-                }
-                .foregroundColor(.blue)
-                .disabled(title.isEmpty || content.isEmpty || isSaving)
-            }
-        }
+        )
         .alert("保存失败", isPresented: $showErrorAlert) {
             Button("确定") { }
         } message: {
             Text(errorMessage)
         }
+    }
+    
+    // 获取星期几
+    private func getDayOfWeek() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE"
+        formatter.locale = Locale(identifier: "zh_CN")
+        return formatter.string(from: Date())
+    }
+    
+    // 获取格式化的日期
+    private func getFormattedDate() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM.dd"
+        return formatter.string(from: Date())
+    }
+    
+    // 根据日记情绪获取对应的背景颜色
+    private func getEmotionBackgroundColor() -> Color? {
+        // 从 EmotionData 中查找对应的背景颜色
+        if let emotionData = EmotionData.emotions.first(where: { $0.assetName == selectedEmotion.iconName }) {
+            return emotionData.backgroundColor
+        }
+        return nil
     }
     
     private func saveJournal() {

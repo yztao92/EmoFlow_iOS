@@ -159,13 +159,8 @@ struct ChatrecordDetailView: View {
                 }
             }
         }
+        .navigationTitle(record.title ?? "心情笔记")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(record.title ?? "心情笔记")
-                    .font(.headline).bold()
-            }
-        }
         .sheet(isPresented: $showShareSheet) {
             if let image = shareImage {
                 ShareSheet(activityItems: [image])

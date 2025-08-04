@@ -7,6 +7,7 @@ struct ChatHistoryView: View {
     @State private var selectedTab: Int = 0 // 0: 列表, 1: 洞察
     @State private var showEditView = false // 控制编辑页面显示
     @State private var editingRecord: ChatRecord? = nil // 正在编辑的记录
+    @State private var showDetailView = false // 控制详情页面显示
     var navigateToJournalId: Int? = nil // 接收导航目标
     var onNavigationComplete: (() -> Void)? = nil // 导航完成后的回调
     
@@ -17,10 +18,6 @@ struct ChatHistoryView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部标题
-            Text("日记")
-                .font(.system(size: 20, weight: .bold))
-                .padding(.top, 8)
             
             // 分段控制器
             HStack(spacing: 0) {
@@ -28,9 +25,9 @@ struct ChatHistoryView: View {
                     Text("列表")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(selectedTab == 0 ? .blue : .primary)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(selectedTab == 0 ? Color(.systemBackground) : Color(.systemGray5))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(selectedTab == 0 ? Color(.systemGray6) : Color.clear)
                         .cornerRadius(8)
                 }
                 
@@ -38,18 +35,19 @@ struct ChatHistoryView: View {
                     Text("洞察")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(selectedTab == 1 ? .blue : .primary)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(selectedTab == 1 ? Color(.systemBackground) : Color(.systemGray5))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(selectedTab == 1 ? Color(.systemGray6) : Color.clear)
                         .cornerRadius(8)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Color(.systemGray5))
+            .padding(.vertical, 6)
+            .background(Color(.systemBackground))
             .cornerRadius(12)
+            .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, 16)
+            .padding(.bottom, 8)
             
             // 内容区域
             if selectedTab == 0 {
@@ -59,7 +57,7 @@ struct ChatHistoryView: View {
             }
         }
         .background(Color(.systemGray6))
-        .navigationBarHidden(true)
+        .navigationTitle("日记")
         .onAppear { 
             loadRecords()
             // 如果有导航目标，查找对应的记录并导航
@@ -88,38 +86,45 @@ struct ChatHistoryView: View {
                 )
             }
         }
+        .navigationDestination(isPresented: $showDetailView) {
+            if let record = selectedRecord {
+                ChatrecordDetailView(record: record, onSave: { newSummary in
+                    record.summary = newSummary
+                    // 刷新本地数据
+                    if let index = records.firstIndex(where: { $0.id == record.id }) {
+                        records[index] = record
+                    }
+                })
+            }
+        }
     }
     
     // 日记列表视图
     private var diaryListView: some View {
         List {
             ForEach(sortedRecords) { record in
-                JournalEntryCard(record: record) {
-                    selectedRecord = record
-                    // 手动点击时也清除导航状态
-                    onNavigationComplete?()
-                }
+                JournalEntryCard(
+                    record: record,
+                    onTap: {
+                        selectedRecord = record
+                        showDetailView = true
+                        // 手动点击时也清除导航状态
+                        onNavigationComplete?()
+                    },
+                    onEdit: {
+                        editingRecord = record
+                        showEditView = true
+                    },
+                    onDelete: {
+                        delete(record)
+                    }
+                )
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    // 删除按钮
-                    Button(role: .destructive) {
-                        delete(record)
-                    } label: {
-                        Label("删除", systemImage: "trash")
-                    }
-                    
-                    // 编辑按钮
-                    Button {
-                        editJournal(record)
-                    } label: {
-                        Label("编辑", systemImage: "pencil")
-                    }
-                    .tint(.blue)
-                }
+
                 .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
             }
         }
         .listStyle(PlainListStyle())
@@ -197,6 +202,10 @@ struct ChatHistoryView: View {
 struct JournalEntryCard: View {
     let record: ChatRecord
     let onTap: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    
+    @State private var showActionSheet = false
     
     var body: some View {
         Button(action: onTap) {
@@ -209,7 +218,7 @@ struct JournalEntryCard: View {
                 
                 // 主要内容区域
                 VStack(alignment: .leading, spacing: 0) {
-                    // 1. 情绪icon + 日期
+                    // 1. 情绪icon + 日期 + more按钮
                     HStack(spacing: 12) {
                         // 情绪图标
                         Image(record.emotion?.iconName ?? "Happy")
@@ -222,6 +231,18 @@ struct JournalEntryCard: View {
                             .foregroundColor(.primary)
                         
                         Spacer()
+                        
+                        // More按钮
+                        Button(action: {
+                            showActionSheet = true
+                        }) {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .frame(width: 44, height: 44)
+                                .rotationEffect(.degrees(90))
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
@@ -266,6 +287,17 @@ struct JournalEntryCard: View {
             .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
+        .confirmationDialog("选择操作", isPresented: $showActionSheet, titleVisibility: .hidden) {
+            Button("编辑") {
+                onEdit()
+            }
+            
+            Button("删除", role: .destructive) {
+                onDelete()
+            }
+            
+            Button("取消", role: .cancel) { }
+        }
     }
     
     private func formatDate(_ date: Date) -> String {
