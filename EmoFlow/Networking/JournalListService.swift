@@ -24,6 +24,7 @@ struct JournalData: Codable {
     let session_id: String
     let created_at: String?
     let updated_at: String?
+    let emotion: String?  // 添加emotion字段
 }
 
 // MARK: - 自定义错误
@@ -118,12 +119,24 @@ class JournalListService {
             
             // 5. 转换为ChatRecord格式
             print("🔍 日记列表接口 - 开始转换日记数据:")
+            print("   总日记数: \(wrapper.journals.count)")
+            print("   分页信息: limit=\(wrapper.limit), offset=\(wrapper.offset), total=\(wrapper.total)")
+            
             for (index, journalData) in wrapper.journals.enumerated() {
-                print("   日记 \(index + 1):")
-                print("     ID: \(journalData.id)")
-                print("     标题: \(journalData.title)")
-                print("     创建时间: \(journalData.created_at ?? "null")")
-                print("     更新时间: \(journalData.updated_at ?? "null")")
+                print("   📝 日记 \(index + 1):")
+                print("      ID: \(journalData.id)")
+                print("      标题: \(journalData.title)")
+                print("      内容: \(journalData.content.prefix(100))\(journalData.content.count > 100 ? "..." : "")")
+                print("      创建时间: \(journalData.created_at ?? "null")")
+                print("      更新时间: \(journalData.updated_at ?? "null")")
+                print("      消息数量: \(journalData.messages.count)")
+                print("      会话ID: \(journalData.session_id)")
+                
+                // 打印消息内容
+                for (msgIndex, message) in journalData.messages.enumerated() {
+                    print("       消息 \(msgIndex + 1): role=\(message.role), content=\(message.content.prefix(50))\(message.content.count > 50 ? "..." : "")")
+                }
+                print("")
             }
             
             let chatRecords = wrapper.journals.compactMap { journalData -> ChatRecord? in
@@ -157,50 +170,96 @@ class JournalListService {
     
     /// 将后端JournalData转换为前端ChatRecord
     private func convertJournalDataToChatRecord(_ journalData: JournalData) -> ChatRecord? {
+        print("🔄 转换日记 ID \(journalData.id):")
+        
         // 转换消息格式
         let messages = journalData.messages.map { dto in
             ChatMessage(role: dto.role == "user" ? .user : .assistant, content: dto.content)
         }
+        print("   消息数量: \(messages.count)")
         
-        // 转换时间格式 - 使用更新时间
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+        // 使用创建时间作为主要时间
+        let createdDate = parseBackendTime(journalData.created_at)
         
-        let date = journalData.updated_at.flatMap { dateFormatter.date(from: $0) } ?? Date()
-        print("🔍 日记时间转换: \(journalData.updated_at ?? "null") -> \(date)")
+        print("   创建时间: \(journalData.created_at ?? "null") -> 解析后: \(createdDate)")
         
-        // 转换情绪类型（从标题或内容中推断）
-        let emotion = inferEmotionFromContent(journalData.content)
+        // 转换情绪类型（从后端emotion字段获取）
+        let emotion = convertBackendEmotionToEmotionType(journalData.emotion)
+        print("   后端情绪: \(journalData.emotion ?? "null") -> 转换后: \(emotion.rawValue)")
         
-        return ChatRecord(
+        let chatRecord = ChatRecord(
             id: UUID(), // 前端使用UUID，后端使用Int
             backendId: journalData.id, // 保存后端ID
-            date: date,
+            date: createdDate, // 使用创建时间
             messages: messages,
             summary: journalData.content,
             emotion: emotion,
             title: journalData.title
         )
+        
+        print("   ✅ 转换完成: 标题=\(chatRecord.title ?? "无标题"), 情绪=\(emotion.rawValue)")
+        return chatRecord
     }
     
-    /// 从内容中推断情绪类型
-    private func inferEmotionFromContent(_ content: String) -> EmotionType {
-        let lowerContent = content.lowercased()
+    /// 解析后端时间，直接使用，不做时区转换
+    private func parseBackendTime(_ timeString: String?) -> Date {
+        guard let timeString = timeString else { return Date() }
         
-        if lowerContent.contains("生气") || lowerContent.contains("愤怒") || lowerContent.contains("恼火") {
-            return .angry
-        } else if lowerContent.contains("悲伤") || lowerContent.contains("难过") || lowerContent.contains("伤心") {
-            return .sad
-        } else if lowerContent.contains("不开心") || lowerContent.contains("沮丧") || lowerContent.contains("郁闷") {
-            return .unhappy
-        } else if lowerContent.contains("开心") || lowerContent.contains("高兴") || lowerContent.contains("快乐") {
-            return .happy
-        } else if lowerContent.contains("平和") || lowerContent.contains("平静") || lowerContent.contains("安宁") {
-            return .peaceful
-        } else if lowerContent.contains("幸福") || lowerContent.contains("满足") || lowerContent.contains("喜悦") {
-            return .happiness
+        // 尝试多种时间格式，直接解析为本地时间
+        let formatters = [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss.SSSSSS",
+            "yyyy-MM-dd HH:mm:ss.SSS",
+            "yyyy-MM-dd HH:mm:ss"
+        ]
+        
+        for format in formatters {
+            let formatter = DateFormatter()
+            formatter.dateFormat = format
+            formatter.timeZone = TimeZone.current // 直接使用本地时区
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            
+            if let date = formatter.date(from: timeString) {
+                return date
+            }
         }
         
-        return .happy // 默认情绪
+        // 如果所有格式都失败，返回当前时间
+        print("⚠️ 无法解析时间格式: \(timeString)，使用当前时间")
+        return Date()
+    }
+    
+    /// 将后端emotion字段转换为EmotionType
+    private func convertBackendEmotionToEmotionType(_ backendEmotion: String?) -> EmotionType {
+        guard let emotion = backendEmotion else {
+            print("   -> 后端emotion为空，默认使用peaceful")
+            return .peaceful
+        }
+        
+        switch emotion.lowercased() {
+        case "angry":
+            print("   -> 后端emotion: angry")
+            return .angry
+        case "sad":
+            print("   -> 后端emotion: sad")
+            return .sad
+        case "unhappy":
+            print("   -> 后端emotion: unhappy")
+            return .unhappy
+        case "happy":
+            print("   -> 后端emotion: happy")
+            return .happy
+        case "happiness":
+            print("   -> 后端emotion: happiness")
+            return .happiness
+        case "peaceful":
+            print("   -> 后端emotion: peaceful")
+            return .peaceful
+        default:
+            print("   -> 后端emotion: \(emotion) (未知类型，默认使用peaceful)")
+            return .peaceful
+        }
     }
 } 

@@ -35,29 +35,13 @@ struct ChatrecordDetailView: View {
             .ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // 移除内容区的主标题
-                TabView(selection: $selectedPage) {
-                    // 笔记内容页
+                // 根据是否有聊天记录决定显示内容
+                if record.messages.isEmpty {
+                    // 没有聊天记录时，只显示笔记内容
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
-                            // 添加标题
-                            if let title = record.title, !title.isEmpty {
-                                Text(title)
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.primary)
-                                    .padding(.bottom, 4)
-                            } else {
-                                Text("今日心情")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.primary)
-                                    .padding(.bottom, 4)
-                            }
-                            
                             Text(record.summary)
                                 .font(.body)
-                                .padding(.top, 8)
                             HStack {
                                 Spacer()
                                 Text(formattedDate(record.date))
@@ -69,14 +53,31 @@ struct ChatrecordDetailView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
                     }
-                    .tag(0)
+                } else {
+                    // 有聊天记录时，显示TabView
+                    TabView(selection: $selectedPage) {
+                        // 笔记内容页
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text(record.summary)
+                                    .font(.body)
+                                HStack {
+                                    Spacer()
+                                    Text(formattedDate(record.date))
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                            .padding()
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
+                        }
+                        .tag(0)
 
-                    // 聊天记录页
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            let messages = record.messages
-                            if !messages.isEmpty {
-                                ForEach(messages, id: \ .id) { msg in
+                        // 聊天记录页
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 16) {
+                                ForEach(record.messages, id: \.id) { msg in
                                     HStack(alignment: .bottom, spacing: 8) {
                                         if msg.role == .assistant {
                                             Image("AIicon")
@@ -103,17 +104,13 @@ struct ChatrecordDetailView: View {
                                     .padding(.vertical, 2)
                                     .padding(.horizontal, 8)
                                 }
-                            } else {
-                                Text("暂无聊天记录")
-                                    .foregroundColor(.gray)
-                                    .padding()
                             }
+                            .padding()
                         }
-                        .padding()
+                        .tag(1)
                     }
-                    .tag(1)
+                    .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                 }
-                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
 
                 // 按钮暂时隐藏
                 // if selectedPage == 0 {
@@ -148,22 +145,24 @@ struct ChatrecordDetailView: View {
                 //     .padding(.horizontal, 32)
                 //     .padding(.top, 8)
                 // }
-                // 点状分页指示器始终在最底部
-                HStack(spacing: 8) {
-                    ForEach(0..<2) { idx in
-                        Circle()
-                            .fill(selectedPage == idx ? Color.blue : Color.gray.opacity(0.3))
-                            .frame(width: 8, height: 8)
+                // 点状分页指示器 - 只在有聊天记录时显示
+                if !record.messages.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(0..<2) { idx in
+                            Circle()
+                                .fill(selectedPage == idx ? Color.blue : Color.gray.opacity(0.3))
+                                .frame(width: 8, height: 8)
+                        }
                     }
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
                 }
-                .padding(.top, 8)
-                .padding(.bottom, 16)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("心情笔记")
+                Text(record.title ?? "心情笔记")
                     .font(.headline).bold()
             }
         }
@@ -175,6 +174,11 @@ struct ChatrecordDetailView: View {
         .onAppear {
             editedSummary = record.summary
             editedTitle = record.title ?? ""
+            
+            // 如果没有聊天记录，确保selectedPage为0
+            if record.messages.isEmpty {
+                selectedPage = 0
+            }
             
             // 检查是否需要获取详情
             if let backendId = record.backendId {

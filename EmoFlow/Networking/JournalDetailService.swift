@@ -167,7 +167,7 @@ class JournalDetailService {
             ChatMessage(role: dto.role == "user" ? .user : .assistant, content: dto.content)
         }
         
-        // 转换时间格式
+        // 转换时间格式，使用创建时间
         let dateFormatter = ISO8601DateFormatter()
         let date = journalData.created_at.flatMap { dateFormatter.date(from: $0) } ?? Date()
         
@@ -177,7 +177,7 @@ class JournalDetailService {
         return ChatRecord(
             id: UUID(), // 前端使用UUID，后端使用Int
             backendId: journalData.id, // 保存后端ID
-            date: date,
+            date: date, // 使用创建时间
             messages: messages,
             summary: journalData.content,
             emotion: emotion,

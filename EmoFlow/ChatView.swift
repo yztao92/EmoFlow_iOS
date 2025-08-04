@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ChatView: View {
     @Binding var emotions: [EmotionType]
-    @Binding var selectedTab: Int      // 当前选中 Tab 索引
     var initialMessage: String         // 新增：初始消息
     var sessionID: String
     @Binding var selectedRecord: ChatRecord?
@@ -299,7 +298,8 @@ struct ChatView: View {
                 )
                 if didTimeout { return } // 超时后不再处理
                 print("📓 AI 生成的心情日记：\n\(journal)")
-                let newRecord = ChatRecord(id: UUID(), date: Date(), messages: messages, summary: journal, emotion: emotion, title: title)
+                let now = Date()
+                let newRecord = ChatRecord(id: UUID(), date: now, messages: messages, summary: journal, emotion: emotion, title: title)
                 chatRecords.append(newRecord)
                 RecordManager.saveAll(chatRecords)
                 
@@ -308,7 +308,6 @@ struct ChatView: View {
                 
                 DispatchQueue.main.async {
                     if !didTimeout {
-                        selectedTab = 1
                         selectedRecord = newRecord // 跳转到详情页
                         isSaving = false
                     }
@@ -317,7 +316,8 @@ struct ChatView: View {
                 if didTimeout { return }
                 print("❌ 生成心情日记失败: \(error)")
                 let fallbackSummary = messages.first?.content ?? "新会话"
-                let fallbackRecord = ChatRecord(id: UUID(), date: Date(), messages: messages, summary: fallbackSummary, emotion: emotion, title: "今日心情")
+                let now = Date()
+                let fallbackRecord = ChatRecord(id: UUID(), date: now, messages: messages, summary: fallbackSummary, emotion: emotion, title: "今日心情")
                 chatRecords.append(fallbackRecord)
                 RecordManager.saveAll(chatRecords)
                 DispatchQueue.main.async {

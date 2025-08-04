@@ -7,6 +7,71 @@ extension Color {
     static let buttonText = Color(red: 0.90, green: 0.96, blue: 0.94)
 }
 
+// MARK: - 弹窗组件
+struct ActionSheetView: View {
+    let emotionType: EmotionType
+    let onChat: () -> Void
+    let onRecord: () -> Void
+    let onDismiss: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // 半透明背景
+            Color.black.opacity(0.4)
+                .onTapGesture {
+                    onDismiss()
+                }
+            
+            // 弹窗内容
+            VStack(spacing: 16) {
+                // 标题
+                Text("选择操作")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .padding(.top, 20)
+                
+                // 按钮
+                VStack(spacing: 12) {
+                    // 和我聊聊按钮
+                    Button(action: onChat) {
+                        HStack {
+                            Image(systemName: "message.fill")
+                                .font(.system(size: 16))
+                            Text("和我聊聊")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(Color.blue)
+                        .cornerRadius(12)
+                    }
+                    
+                    // 记录按钮
+                    Button(action: onRecord) {
+                        HStack {
+                            Image(systemName: "book.fill")
+                                .font(.system(size: 16))
+                            Text("记录")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(Color.green)
+                        .cornerRadius(12)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+            .background(Color(.systemBackground))
+            .cornerRadius(16, corners: [.topLeft, .topRight])
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+}
+
 // MARK: - 情绪数据模型
 struct EmotionData {
     let name: String
@@ -24,7 +89,7 @@ struct EmotionData {
             name: "哼，气死我得了",
             assetName: "Angry",
             color: Color(red: 1, green: 0.52, blue: 0.24),
-            backgroundColor: Color(red: 1, green: 0.94, blue: 0.90), // FFFEF5
+            backgroundColor: Color(red: 1, green: 0.52, blue: 0.24), // FF843E
             cardBackgroundColor: Color(red: 1, green: 0.52, blue: 0.24), // FF843E
             titleColor: Color(red: 0.47, green: 0.18, blue: 0.02), // 782E04
             emotionTextColor: Color(red: 0.57, green: 0.22, blue: 0.01), // 913704
@@ -35,7 +100,7 @@ struct EmotionData {
             name: "唉，哭了",
             assetName: "Sad",
             color: Color(red: 0.55, green: 0.64, blue: 0.93),
-            backgroundColor: Color(red: 0.92, green: 0.94, blue: 1), // EBF0FF
+            backgroundColor: Color(red: 0.55, green: 0.64, blue: 0.93), // 8CA4EE
             cardBackgroundColor: Color(red: 0.55, green: 0.64, blue: 0.93), // 8CA4EE
             titleColor: Color(red: 0.19, green: 0.23, blue: 0.33), // 313A54
             emotionTextColor: Color(red: 0.21, green: 0.25, blue: 0.35), // 363F59
@@ -46,9 +111,9 @@ struct EmotionData {
             name: "今天我是不大高兴了",
             assetName: "Unhappy",
             color: Color(red: 0.63, green: 0.91, blue: 0.92),
-            backgroundColor: Color(red: 0.93, green: 1, blue: 1), // EDFEFF
+            backgroundColor: Color(red: 0.63, green: 0.91, blue: 0.92), // A1E7EB
             cardBackgroundColor: Color(red: 0.63, green: 0.91, blue: 0.92), // A1E7EB
-            titleColor: Color(red: 0.19, green: 0.23, blue: 0.33), // 313A54
+            titleColor: Color(red: 0.23, green: 0.45, blue: 0.47), // 3A7478
             emotionTextColor: Color(red: 0.21, green: 0.25, blue: 0.35), // 363F59
             paginationColor: Color(red: 0.63, green: 0.91, blue: 0.92) // A1E7EB
         ),
@@ -57,7 +122,7 @@ struct EmotionData {
             name: "无风无浪的一天",
             assetName: "Peaceful",
             color: Color(red: 0.36, green: 0.42, blue: 0.63),
-            backgroundColor: Color(red: 0.96, green: 0.98, blue: 1), // F5F9FF
+            backgroundColor: Color(red: 0.87, green: 0.92, blue: 1), // DFEBFF
             cardBackgroundColor: Color(red: 0.87, green: 0.92, blue: 1), // DFEBFF
             titleColor: Color(red: 0.31, green: 0.36, blue: 0.53), // 505D87
             emotionTextColor: Color(red: 0.36, green: 0.42, blue: 0.63), // 5C6CA1
@@ -68,7 +133,7 @@ struct EmotionData {
             name: "今天蛮开心的",
             assetName: "Happy",
             color: Color(red: 0.99, green: 0.87, blue: 0.44),
-            backgroundColor: Color(red: 1, green: 0.98, blue: 0.93), // FFFBED
+            backgroundColor: Color(red: 0.99, green: 0.87, blue: 0.44), // FDDD6F
             cardBackgroundColor: Color(red: 0.99, green: 0.87, blue: 0.44), // FDDD6F
             titleColor: Color(red: 0.40, green: 0.31, blue: 0), // 664F00
             emotionTextColor: Color(red: 0.39, green: 0.33, blue: 0.13), // 635522
@@ -79,7 +144,7 @@ struct EmotionData {
             name: "满满的幸福",
             assetName: "Happiness",
             color: Color(red: 0.63, green: 0.91, blue: 0.92),
-            backgroundColor: Color(red: 1, green: 0.94, blue: 0.95), // FFF0F3
+            backgroundColor: Color(red: 1, green: 0.65, blue: 0.74), // FFA7BC
             cardBackgroundColor: Color(red: 1, green: 0.65, blue: 0.74), // FFA7BC
             titleColor: Color(red: 0.30, green: 0.20, blue: 0.22), // 4D3238
             emotionTextColor: Color(red: 0.40, green: 0.26, blue: 0.29), // 66424B
@@ -88,174 +153,129 @@ struct EmotionData {
     ]
 }
 
-// MARK: - 上滑提示图标组件
-struct SwipeUpIndicator: View {
-    let color: Color
-    @State private var isAnimating = false
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            // 上滑箭头图标
-            Image(systemName: "chevron.up")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(color)
-                .opacity(0.7)
-                .offset(y: isAnimating ? -4 : 0)
-                .animation(
-                    Animation.easeInOut(duration: 1.5)
-                        .repeatForever(autoreverses: true),
-                    value: isAnimating
-                )
-            
-            // 提示文字
-            Text("上滑继续")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(color)
-                .opacity(0.6)
-        }
-        .onAppear {
-            isAnimating = true
-        }
-    }
-}
-
 // MARK: - 问候语组件
 struct GreetingView: View {
     let greeting: String
     let titleColor: Color
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 16) {
             Text(greeting)
-                .font(.system(size: 28, weight: .bold))
+                .font(.system(size: 32, weight: .bold))
                 .foregroundColor(titleColor)
+                .frame(maxWidth: .infinity, alignment: .center)
             
             Text("你今天过得好吗？")
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundColor(titleColor.opacity(0.8))
+                .foregroundColor(titleColor)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
-        .padding(.leading, 20)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - 上滑提示组件
+struct SwipeUpHintView: View {
+    let titleColor: Color
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(titleColor)
+            
+            Text("上滑继续")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(titleColor)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.white.opacity(0.1))
+        )
     }
 }
 
 // MARK: - 情绪图标组件
 struct EmotionIconView: View {
     let emotion: EmotionData
+    let isSelected: Bool
+    let onTap: () -> Void
     
     var body: some View {
-        ZStack {
-            Image(emotion.assetName)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.easeInOut(duration: 0.3), value: emotion.assetName)
-        }
-        .frame(height: 240)
+        Image(emotion.assetName)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: isSelected ? 280 : 120, height: isSelected ? 280 : 120)
+            .opacity(isSelected ? 1.0 : 0.4)
     }
 }
 
-// MARK: - 情绪卡片组件
-struct EmotionCardView: View {
-    let emotion: EmotionData
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            // 情绪图标
-            EmotionIconView(emotion: emotion)
-            
-            // 情绪名称
-            Text(emotion.name)
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundColor(emotion.emotionTextColor)
-                .padding(EdgeInsets(top: 4, leading: 0, bottom: 6, trailing: 0))
-        }
-        .padding(EdgeInsets(top: 48, leading: 0, bottom: 24, trailing: 0))
-        .frame(maxWidth: .infinity)
-        .background(emotion.cardBackgroundColor)
-        .cornerRadius(24)
-        .padding(.horizontal, 20)
-    }
-}
-
-// MARK: - 分页指示器组件
-struct PaginationView: View {
+// MARK: - 情绪选择区域
+struct EmotionSelectionArea: View {
     let emotions: [EmotionData]
     let currentIndex: Int
-    let onTap: (Int) -> Void
+    let onEmotionTap: (Int) -> Void
     
     var body: some View {
-        HStack(spacing: 14) {
-            Spacer()
-            ForEach(0..<emotions.count, id: \.self) { index in
-                Circle()
-                    .fill(emotions[index].paginationColor)
-                    .frame(width: index == currentIndex ? 24 : 12, height: index == currentIndex ? 24 : 12)
-                    .animation(.easeInOut(duration: 0.2), value: currentIndex)
-                    .onTapGesture {
-                        onTap(index)
+        GeometryReader { geometry in
+            ZStack {
+                // 左侧未选中的情绪图标
+                HStack {
+                    EmotionIconView(
+                        emotion: emotions[(currentIndex - 1 + emotions.count) % emotions.count],
+                        isSelected: false
+                    ) {
+                        onEmotionTap((currentIndex - 1 + emotions.count) % emotions.count)
                     }
-            }
-            Spacer()
-    }
-}
-}
-
-// MARK: - 情绪弹窗组件
-struct EmotionModalView: View {
-    let emotion: EmotionData
-    @Binding var isPresented: Bool
-    let onChatButtonTapped: () -> Void
-    
-    var body: some View {
-        ZStack {
-            // 背景遮罩
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    isPresented = false
+                    .offset(x: -60)
+                    
+                    Spacer()
                 }
-            
-            // 弹窗内容
-            VStack(spacing: 24) {
-                // 情绪卡片
-                EmotionCardView(emotion: emotion)
-                    .scaleEffect(1.1) // 稍微放大一点
                 
-                // 和我聊聊按钮
-                Button(action: {
-                    isPresented = false // 关闭弹窗
-                    onChatButtonTapped() // 触发聊天
-                }) {
-                    HStack {
-                        Image(systemName: "message.fill")
-                            .font(.system(size: 16, weight: .medium))
-                        Text("和我聊聊")
-                            .font(.system(size: 18, weight: .semibold))
-    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(emotion.cardBackgroundColor)
-                    .cornerRadius(25)
-                    .shadow(color: emotion.cardBackgroundColor.opacity(0.3), radius: 10, x: 0, y: 5)
+                // 中央选中的情绪图标
+                HStack {
+                    Spacer()
+                    EmotionIconView(
+                        emotion: emotions[currentIndex],
+                        isSelected: true
+                    ) {
+                        onEmotionTap(currentIndex)
+                    }
+                    Spacer()
                 }
-                .padding(.horizontal, 20)
+                
+                // 右侧未选中的情绪图标
+                HStack {
+                    Spacer()
+                    EmotionIconView(
+                        emotion: emotions[(currentIndex + 1) % emotions.count],
+                        isSelected: false
+                    ) {
+                        onEmotionTap((currentIndex + 1) % emotions.count)
+                    }
+                    .offset(x: 60)
+                }
             }
-            .padding(.horizontal, 20)
+            .frame(width: geometry.size.width)
+            .clipped()
         }
-        .background(Color.clear)
+        .frame(height: 280)
     }
 }
 
-// MARK: - 主视图
+// MARK: - 主内容视图
 struct ContentView: View {
     var onTriggerChat: (EmotionType, String) -> Void
     @Binding var emotions: [EmotionType]
     var onBackgroundColorChange: ((Color) -> Void)? = nil
+    @Binding var navigateToJournalId: Int?
+    var onNavigateToJournal: ((Int) -> Void)? = nil
 
     @State private var currentEmotionIndex: Int = 3 // 默认显示平和
-    @State private var showEmotionModal: Bool = false // 控制弹窗显示
+    @State private var showJournalEdit: Bool = false // 控制日记编辑页面显示
+    @State private var showActionSheet: Bool = false // 控制弹窗显示
+    @State private var selectedEmotionForAction: EmotionType? // 记录当前选中的情绪用于弹窗操作
     
     private var currentEmotion: EmotionData {
         EmotionData.emotions[currentEmotionIndex]
@@ -264,88 +284,106 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                // 问候语
+                // 问候语区域
                 GreetingView(greeting: greeting, titleColor: currentEmotion.titleColor)
-                    .padding(.top, 48)
+                    .padding(.top, 120) // 问候语到右上角图标间距56px（64px + 56px）
 
-                // 固定间距
-                Spacer()
-                    .frame(height: 64)
-
-                VStack(spacing: 16) {
-                    // 情绪卡片
-                    EmotionCardView(emotion: currentEmotion)
-                    
-                    // 分页指示器
-                    PaginationView(
+                // 情绪选择区域
+                VStack(spacing: 20) {
+                    // 情绪图标
+                    EmotionSelectionArea(
                         emotions: EmotionData.emotions,
                         currentIndex: currentEmotionIndex,
-                        onTap: { index in
-                            // 触发震动反馈
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                            
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                currentEmotionIndex = index
-                            }
+                        onEmotionTap: { index in
+                            // 点击情绪图标不执行任何操作
                         }
                     )
+                    
+                    // 情绪文字
+                    Text(currentEmotion.name)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(currentEmotion.emotionTextColor)
+                        .multilineTextAlignment(.center)
                 }
+                .padding(.top, 68) // 情绪图标和问候语间距68px
+                .frame(maxWidth: .infinity) // 确保宽度占满容器
 
                 Spacer()
-
-                // 上滑提示图标
-                SwipeUpIndicator(color: currentEmotion.titleColor)
+                
+                // 上滑提示
+                SwipeUpHintView(titleColor: currentEmotion.titleColor)
+                    .padding(.bottom, 40)
             }
-            .padding(EdgeInsets(top: 0, leading: 20, bottom: 20, trailing: 20))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(currentEmotion.backgroundColor)
-        .onChange(of: currentEmotion.backgroundColor) { _, newColor in
-            onBackgroundColorChange?(newColor)
-        }
-        .onAppear {
-            onBackgroundColorChange?(currentEmotion.backgroundColor)
-        }
-                        .gesture(
-            DragGesture()
-                .onEnded { value in
-                    let threshold: CGFloat = 50
-                    let horizontalThreshold: CGFloat = 30 // 水平方向的阈值
-                    
-                    // 判断主要滑动方向
-                    let horizontalDistance = abs(value.translation.width)
-                    let verticalDistance = abs(value.translation.height)
-                    
-                    if verticalDistance > horizontalDistance {
-                        // 垂直滑动为主
-                        if value.translation.height < -threshold {
-                            // 向上滑动显示弹窗
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                showEmotionModal = true
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(currentEmotion.backgroundColor)
+            .onChange(of: currentEmotion.backgroundColor) { _, newColor in
+                onBackgroundColorChange?(newColor)
+            }
+            .onAppear {
+                onBackgroundColorChange?(currentEmotion.backgroundColor)
+            }
+            .gesture(
+                DragGesture()
+                    .onEnded { value in
+                        let horizontalThreshold: CGFloat = 80
+                        let verticalThreshold: CGFloat = 60
+                        
+                        // 计算水平和垂直移动的距离
+                        let horizontalDistance = abs(value.translation.width)
+                        let verticalDistance = abs(value.translation.height)
+                        
+                        // 判断主要移动方向
+                        if horizontalDistance > verticalDistance {
+                            // 水平移动为主
+                            if value.translation.width > horizontalThreshold {
+                                // 向右滑动，切换到上一个情绪
+                                switchToPreviousEmotion()
+                            } else if value.translation.width < -horizontalThreshold {
+                                // 向左滑动，切换到下一个情绪
+                                switchToNextEmotion()
+                            }
+                        } else {
+                            // 垂直移动为主
+                            if value.translation.height < -verticalThreshold {
+                                // 向上滑动，显示弹窗
+                                selectedEmotionForAction = convertEmotionDataToEmotionType(currentEmotion)
+                                showActionSheet = true
                             }
                         }
-                    } else {
-                        // 水平滑动为主
-                        if value.translation.width > horizontalThreshold {
-                            switchToPreviousEmotion()
-                        } else if value.translation.width < -horizontalThreshold {
-                            switchToNextEmotion()
-                        }
                     }
-                }
-        )
-        .fullScreenCover(isPresented: $showEmotionModal) {
-            EmotionModalView(
-                emotion: currentEmotion,
-                isPresented: $showEmotionModal,
-                onChatButtonTapped: {
-                    // 触发聊天功能
-                    let emotionType = convertEmotionDataToEmotionType(currentEmotion)
-                    let chatMessage = "我现在感觉到 \(currentEmotion.name)"
-                    onTriggerChat(emotionType, chatMessage)
-                }
             )
+            .navigationDestination(isPresented: $showJournalEdit) {
+                JournalEditView(
+                    initialEmotion: convertEmotionDataToEmotionType(currentEmotion),
+                    onJournalCreated: { journalId in
+                        // 创建成功后，关闭编辑页面并跳转到日记详情页面
+                        showJournalEdit = false
+                        navigateToJournalDetail(journalId: journalId)
+                    }
+                )
+            }
+            
+            // 弹窗
+            if showActionSheet {
+                ActionSheetView(
+                    emotionType: selectedEmotionForAction ?? .peaceful,
+                    onChat: {
+                        showActionSheet = false
+                        if let emotionType = selectedEmotionForAction {
+                            let chatMessage = getEmotionChatMessage(emotionType)
+                            onTriggerChat(emotionType, chatMessage)
+                        }
+                    },
+                    onRecord: {
+                        showActionSheet = false
+                        showJournalEdit = true
+                    },
+                    onDismiss: {
+                        showActionSheet = false
+                    }
+                )
+                .animation(.easeInOut(duration: 0.3), value: showActionSheet)
+            }
         }
     }
 
@@ -389,9 +427,8 @@ struct ContentView: View {
         }
     }
     
-    // 转换EmotionData到EmotionType
-    private func convertEmotionDataToEmotionType(_ emotion: EmotionData) -> EmotionType {
-        switch emotion.name {
+    private func convertEmotionDataToEmotionType(_ emotionData: EmotionData) -> EmotionType {
+        switch emotionData.name {
         case "哼，气死我得了":
             return .angry
         case "唉，哭了":
@@ -405,18 +442,46 @@ struct ContentView: View {
         case "满满的幸福":
             return .happiness
         default:
-            return .happy
+            return .peaceful
+        }
+    }
+    
+    private func getEmotionChatMessage(_ emotionType: EmotionType) -> String {
+        switch emotionType {
+        case .angry:
+            return "我现在感觉到很生气"
+        case .sad:
+            return "我现在感觉到很悲伤"
+        case .unhappy:
+            return "我现在感觉到不开心"
+        case .peaceful:
+            return "我现在心情感觉到很平和"
+        case .happy:
+            return "我现在感觉到蛮开心的"
+        case .happiness:
+            return "我现在感觉到很幸福"
+        }
+    }
+    
+    private func navigateToJournalDetail(journalId: Int) {
+        navigateToJournalId = journalId
+        onNavigateToJournal?(journalId)
     }
 }
+
+// MARK: - 圆角扩展
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
 }
 
-// MARK: - 预览
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView(
-            onTriggerChat: { _, _ in },
-            emotions: .constant([]),
-            onBackgroundColorChange: { _ in }
-        )
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
     }
 }

@@ -17,14 +17,15 @@ class ChatRecord: ObservableObject, Identifiable, Codable, Equatable, Hashable {
     @Published var summary: String
     @Published var emotion: EmotionType?
     @Published var title: String?  // 新增：日记标题
+    @Published var isEdited: Bool = false // 新增：是否被编辑过
 
     var safeEmotion: EmotionType { emotion ?? .happy }
 
     enum CodingKeys: String, CodingKey {
-        case id, backendId, date, messages, summary, emotion, title
+        case id, backendId, date, messages, summary, emotion, title, isEdited
     }
 
-    init(id: UUID, backendId: Int? = nil, date: Date, messages: [ChatMessage], summary: String, emotion: EmotionType?, title: String? = nil) {
+    init(id: UUID, backendId: Int? = nil, date: Date, messages: [ChatMessage], summary: String, emotion: EmotionType?, title: String? = nil, isEdited: Bool = false) {
         self.id = id
         self.backendId = backendId
         self.date = date
@@ -32,6 +33,7 @@ class ChatRecord: ObservableObject, Identifiable, Codable, Equatable, Hashable {
         self.summary = summary
         self.emotion = emotion
         self.title = title
+        self.isEdited = isEdited
     }
 
     required convenience init(from decoder: Decoder) throws {
@@ -43,7 +45,8 @@ class ChatRecord: ObservableObject, Identifiable, Codable, Equatable, Hashable {
         let summary = try container.decode(String.self, forKey: .summary)
         let emotion = try container.decodeIfPresent(EmotionType.self, forKey: .emotion)
         let title = try container.decodeIfPresent(String.self, forKey: .title)
-        self.init(id: id, backendId: backendId, date: date, messages: messages, summary: summary, emotion: emotion, title: title)
+        let isEdited = try container.decodeIfPresent(Bool.self, forKey: .isEdited) ?? false
+        self.init(id: id, backendId: backendId, date: date, messages: messages, summary: summary, emotion: emotion, title: title, isEdited: isEdited)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -55,5 +58,6 @@ class ChatRecord: ObservableObject, Identifiable, Codable, Equatable, Hashable {
         try container.encode(summary, forKey: .summary)
         try container.encode(emotion, forKey: .emotion)
         try container.encode(title, forKey: .title)
+        try container.encode(isEdited, forKey: .isEdited)
     }
 }
