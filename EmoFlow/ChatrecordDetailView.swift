@@ -13,10 +13,8 @@ struct ShareSheet: UIViewControllerRepresentable {
 struct ChatrecordDetailView: View {
     @ObservedObject var record: ChatRecord
     var onSave: ((String) -> Void)? = nil
+    @Binding var navigationPath: NavigationPath
     @State private var selectedPage = 0
-    @State private var showEditSheet = false
-    @State private var editedSummary: String = ""
-    @State private var editedTitle: String = ""  // 新增：编辑标题
     @State private var showShareSheet = false
     @State private var shareImage: UIImage? = nil
     @State private var isLoadingDetail = false
@@ -24,53 +22,64 @@ struct ChatrecordDetailView: View {
     @State private var backgroundStyle: BackgroundStyle = .grid // 背景样式
     // 用于截图的ID
     private let contentCaptureID = "noteContentCapture"
+    
+    // 计算属性：根据日记情绪获取对应的背景颜色
+    private var emotionBackgroundColor: Color? {
+        guard let emotion = record.emotion else { 
+            return nil 
+        }
+        
+        // 直接根据情绪类型返回对应的背景颜色
+        switch emotion {
+        case .happy:
+            return Color.orange.opacity(0.3)
+        case .sad:
+            return Color.blue.opacity(0.3)
+        case .angry:
+            return Color.red.opacity(0.3)
+        case .peaceful:
+            return Color.green.opacity(0.3)
+        case .happiness:
+            return Color.yellow.opacity(0.3)
+        case .unhappy:
+            return Color.purple.opacity(0.3)
+        }
+    }
 
     var body: some View {
         ZStack {
             // 背景
             CustomBackgroundView(
                 style: backgroundStyle,
-                emotionColor: getEmotionBackgroundColor()
+                emotionColor: emotionBackgroundColor
             )
             .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 // 根据是否有聊天记录决定显示内容
                 if record.messages.isEmpty {
-                    // 没有聊天记录时，只显示笔记内容
+                    // 没有聊天记录时，显示笔记内容（使用共享组件）
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text(record.summary)
-                                .font(.body)
-                            HStack {
-                                Spacer()
-                                Text(formattedDate(record.date))
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                        .padding()
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
+                        JournalContentView(
+                            emotion: record.emotion,
+                            title: record.title,
+                            content: record.summary,
+                            date: record.date,
+                            originalTimeString: record.originalTimeString
+                        )
                     }
                 } else {
                     // 有聊天记录时，显示TabView
                     TabView(selection: $selectedPage) {
-                        // 笔记内容页
+                                                // 笔记内容页（使用共享组件）
                         ScrollView {
-                            VStack(alignment: .leading, spacing: 16) {
-                                Text(record.summary)
-                                    .font(.body)
-                                HStack {
-                                    Spacer()
-                                    Text(formattedDate(record.date))
-                                        .font(.subheadline)
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            .padding()
-                            .padding(.horizontal, 16)
-                            .padding(.top, 16)
+                            JournalContentView(
+                                emotion: record.emotion,
+                                title: record.title,
+                                content: record.summary,
+                                date: record.date,
+                                originalTimeString: record.originalTimeString
+                            )
                         }
                         .tag(0)
 
@@ -159,17 +168,60 @@ struct ChatrecordDetailView: View {
                 }
             }
         }
-        .navigationTitle(record.title ?? "心情笔记")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                // 只在笔记内容页（selectedPage == 0）和有聊天记录时显示按钮
+                if !record.messages.isEmpty && selectedPage == 0 {
+                    HStack(spacing: 16) {
+                        // 分享按钮
+                        Button(action: {
+                            captureNoteContent()
+                        }) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.primary)
+                        }
+                        
+                        // 编辑按钮
+                        Button(action: {
+                            navigationPath.append(AppRoute.journalEdit(record: record))
+                        }) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.primary)
+                        }
+                    }
+                } else if record.messages.isEmpty {
+                    // 没有聊天记录时，总是显示按钮
+                    HStack(spacing: 16) {
+                        // 分享按钮
+                        Button(action: {
+                            captureNoteContent()
+                        }) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.primary)
+                        }
+                        
+                        // 编辑按钮
+                        Button(action: {
+                            navigationPath.append(AppRoute.journalEdit(record: record))
+                        }) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.primary)
+                        }
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $showShareSheet) {
             if let image = shareImage {
                 ShareSheet(activityItems: [image])
             }
         }
         .onAppear {
-            editedSummary = record.summary
-            editedTitle = record.title ?? ""
-            
             // 如果没有聊天记录，确保selectedPage为0
             if record.messages.isEmpty {
                 selectedPage = 0
@@ -180,87 +232,38 @@ struct ChatrecordDetailView: View {
                 loadJournalDetailIfNeeded(backendId: backendId)
             }
         }
-        .sheet(isPresented: $showEditSheet) {
-            NavigationView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("编辑心情日记")
-                        .font(.headline)
-                        .padding(.top)
-                    
-                    // 标题输入框
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("标题")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        TextField("请输入标题", text: $editedTitle)
-                            .font(.title3)
-                            .fontWeight(.medium)
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(8)
-                    }
-                    
-                    // 内容输入框
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("内容")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    TextEditor(text: $editedSummary)
-                        .font(.body)
-                        .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(8)
-                        .frame(minHeight: 200)
-                    }
-                    
-                    Spacer()
-                }
-                .padding()
-                .navigationBarTitleDisplayMode(.inline)
-                .navigationBarItems(
-                    leading: Button("返回") {
-                    showEditSheet = false
-                    },
-                    trailing: Button("保存") {
-                    record.summary = editedSummary
-                        record.title = editedTitle.isEmpty ? nil : editedTitle  // 保存标题
-                    onSave?(editedSummary)
-                    showEditSheet = false
-                    }
-                )
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        Text("编辑日记")
-                            .font(.headline)
-                            .fontWeight(.medium)
-                    }
-                }
-            }
-        }
+
     }
     
-    // 加载日记详情（如果需要）
+    // 加载日记详情（优先使用缓存）
     private func loadJournalDetailIfNeeded(backendId: Int) {
-        // 检查是否已有详情缓存
-        if !JournalDetailService.shared.isDetailCached(journalId: backendId) {
-            isLoadingDetail = true
-            
-            Task {
-                do {
-                    let detailedRecord = try await JournalDetailService.shared.fetchAndCacheJournalDetail(journalId: backendId)
-                    await MainActor.run {
-                        // 更新当前记录
-                        record.messages = detailedRecord.messages
-                        record.summary = detailedRecord.summary
-                        record.title = detailedRecord.title
-                        record.emotion = detailedRecord.emotion
-                        isLoadingDetail = false
-                    }
-                } catch {
-                    await MainActor.run {
-                        isLoadingDetail = false
-                        print("❌ 加载日记详情失败: \(error)")
-                    }
+        // 首先尝试从缓存获取
+        if let cachedRecord = JournalDetailService.shared.getCachedJournalDetail(journalId: backendId) {
+            // 更新当前记录
+            record.messages = cachedRecord.messages
+            record.summary = cachedRecord.summary
+            record.title = cachedRecord.title
+            record.emotion = cachedRecord.emotion
+            return
+        }
+        
+        // 如果没有缓存，才请求后端
+        isLoadingDetail = true
+        
+        Task {
+            do {
+                let detailedRecord = try await JournalDetailService.shared.fetchAndCacheJournalDetail(journalId: backendId)
+                await MainActor.run {
+                    // 更新当前记录
+                    record.messages = detailedRecord.messages
+                    record.summary = detailedRecord.summary
+                    record.title = detailedRecord.title
+                    record.emotion = detailedRecord.emotion
+                    isLoadingDetail = false
+                }
+            } catch {
+                await MainActor.run {
+                    isLoadingDetail = false
                 }
             }
         }
@@ -515,18 +518,5 @@ struct GradientBackgroundView: View {
     }
 }
 
-// MARK: - 背景颜色获取方法
-extension ChatrecordDetailView {
-    // 根据日记情绪获取对应的背景颜色
-    private func getEmotionBackgroundColor() -> Color? {
-        guard let emotion = record.emotion else { return nil }
-        
-        // 从 EmotionData 中查找对应的背景颜色
-        if let emotionData = EmotionData.emotions.first(where: { $0.assetName == emotion.iconName }) {
-            return emotionData.backgroundColor
-        }
-        
-        return nil
-    }
-}
+
 

@@ -86,6 +86,16 @@ class JournalDetailService {
                 }
                 
                 if httpResponse.statusCode == 401 {
+                    // 清除本地 token
+                    UserDefaults.standard.removeObject(forKey: "userToken")
+                    UserDefaults.standard.removeObject(forKey: "userName")
+                    UserDefaults.standard.removeObject(forKey: "userEmail")
+                    
+                    // 发送登出通知
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .logout, object: nil)
+                    }
+                    
                     throw JournalDetailServiceError.unauthorized
                 } else if httpResponse.statusCode == 404 {
                     throw JournalDetailServiceError.notFound
@@ -162,26 +172,44 @@ class JournalDetailService {
     
     /// 将后端JournalData转换为前端ChatRecord
     private func convertJournalDataToChatRecord(_ journalData: JournalData) -> ChatRecord? {
+        print("🔄 JournalDetailService - 转换日记数据")
+        print("   后端情绪: \(journalData.emotion ?? "null")")
+        print("   原始内容: \(journalData.content.prefix(100))...")
+        print("   HTML内容: \(journalData.contentHtml.prefix(100))...")
+        print("   纯文本内容: \(journalData.contentPlain.prefix(100))...")
+        
         // 转换消息格式
         let messages = journalData.messages.map { dto in
             ChatMessage(role: dto.role == "user" ? .user : .assistant, content: dto.content)
         }
         
         // 转换时间格式，使用创建时间
-        let dateFormatter = ISO8601DateFormatter()
-        let date = journalData.created_at.flatMap { dateFormatter.date(from: $0) } ?? Date()
+        print("   原始时间字符串: \(journalData.created_at ?? "null")")
+        let date = parseBackendTime(journalData.created_at)
+        print("   转换后的时间: \(date)")
+        print("   当前时间: \(Date())")
         
-        // 转换情绪类型（从标题或内容中推断）
-        let emotion = inferEmotionFromContent(journalData.content)
+        // 转换情绪类型（优先使用后端返回的emotion字段）
+        let emotion: EmotionType
+        if let backendEmotion = journalData.emotion {
+            // 使用后端返回的情绪
+            emotion = convertBackendEmotionToEmotionType(backendEmotion)
+            print("   ✅ 使用后端情绪: \(backendEmotion) -> \(emotion.rawValue)")
+        } else {
+            // 如果后端没有返回情绪，从内容中推断
+            emotion = inferEmotionFromContent(journalData.content)
+            print("   ⚠️ 后端无情绪，从内容推断: \(emotion.rawValue)")
+        }
         
         return ChatRecord(
             id: UUID(), // 前端使用UUID，后端使用Int
             backendId: journalData.id, // 保存后端ID
             date: date, // 使用创建时间
             messages: messages,
-            summary: journalData.content,
+            summary: journalData.contentHtml, // 现在后端已修复，可以使用contentHtml
             emotion: emotion,
-            title: journalData.title
+            title: journalData.title,
+            originalTimeString: journalData.created_at // 保存原始时间字符串
         )
     }
     
@@ -204,5 +232,56 @@ class JournalDetailService {
         }
         
         return .happy // 默认情绪
+    }
+    
+    /// 解析后端时间，直接使用，不做时区转换
+    private func parseBackendTime(_ timeString: String?) -> Date {
+        guard let timeString = timeString else { return Date() }
+        
+        // 尝试多种时间格式，直接解析为本地时间
+        let formatters = [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss.SSSSSS",
+            "yyyy-MM-dd HH:mm:ss.SSS",
+            "yyyy-MM-dd HH:mm:ss"
+        ]
+        
+        for format in formatters {
+            let formatter = DateFormatter()
+            formatter.dateFormat = format
+            formatter.timeZone = TimeZone.current // 直接使用本地时区
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            
+            if let date = formatter.date(from: timeString) {
+                return date
+            }
+        }
+        
+        // 如果所有格式都失败，返回当前时间
+        print("⚠️ 无法解析时间格式: \(timeString)，使用当前时间")
+        return Date()
+    }
+    
+    /// 将后端emotion字段转换为EmotionType
+    private func convertBackendEmotionToEmotionType(_ backendEmotion: String) -> EmotionType {
+        switch backendEmotion.lowercased() {
+        case "angry":
+            return .angry
+        case "sad":
+            return .sad
+        case "unhappy":
+            return .unhappy
+        case "happy":
+            return .happy
+        case "happiness":
+            return .happiness
+        case "peaceful":
+            return .peaceful
+        default:
+            print("   ⚠️ 未知的后端情绪类型: \(backendEmotion)，默认使用peaceful")
+            return .peaceful
+        }
     }
 } 

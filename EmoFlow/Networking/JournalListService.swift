@@ -19,12 +19,24 @@ struct JournalListResponse: Codable {
 struct JournalData: Codable {
     let id: Int
     let title: String
-    let content: String
+    let content: String  // 向后兼容
+    let contentHtml: String  // 新增：净化后的HTML内容
+    let contentPlain: String  // 新增：纯文本内容
+    let contentFormat: String  // 新增：内容格式
+    let isSafe: Bool  // 新增：安全标识
     let messages: [ChatMessageDTO]
     let session_id: String
     let created_at: String?
     let updated_at: String?
-    let emotion: String?  // 添加emotion字段
+    let emotion: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, title, content, messages, session_id, created_at, updated_at, emotion
+        case contentHtml = "content_html"
+        case contentPlain = "content_plain"
+        case contentFormat = "content_format"
+        case isSafe = "is_safe"
+    }
 }
 
 // MARK: - 自定义错误
@@ -113,39 +125,48 @@ class JournalListService {
                 print("   Raw Response: \(responseString)")
             }
             
-            let wrapper = try JSONDecoder().decode(JournalListResponse.self, from: data)
-            print("   Parsed Journals Count: \(wrapper.journals.count)")
-            print("   Total: \(wrapper.total)")
-            
-            // 5. 转换为ChatRecord格式
-            print("🔍 日记列表接口 - 开始转换日记数据:")
-            print("   总日记数: \(wrapper.journals.count)")
-            print("   分页信息: limit=\(wrapper.limit), offset=\(wrapper.offset), total=\(wrapper.total)")
-            
-            for (index, journalData) in wrapper.journals.enumerated() {
-                print("   📝 日记 \(index + 1):")
-                print("      ID: \(journalData.id)")
-                print("      标题: \(journalData.title)")
-                print("      内容: \(journalData.content.prefix(100))\(journalData.content.count > 100 ? "..." : "")")
-                print("      创建时间: \(journalData.created_at ?? "null")")
-                print("      更新时间: \(journalData.updated_at ?? "null")")
-                print("      消息数量: \(journalData.messages.count)")
-                print("      会话ID: \(journalData.session_id)")
+            do {
+                let wrapper = try JSONDecoder().decode(JournalListResponse.self, from: data)
+                print("   Parsed Journals Count: \(wrapper.journals.count)")
+                print("   Total: \(wrapper.total)")
                 
-                // 打印消息内容
-                for (msgIndex, message) in journalData.messages.enumerated() {
-                    print("       消息 \(msgIndex + 1): role=\(message.role), content=\(message.content.prefix(50))\(message.content.count > 50 ? "..." : "")")
+                // 5. 转换为ChatRecord格式
+                print("🔍 日记列表接口 - 开始转换日记数据:")
+                print("   总日记数: \(wrapper.journals.count)")
+                print("   分页信息: limit=\(wrapper.limit), offset=\(wrapper.offset), total=\(wrapper.total)")
+                
+                for (index, journalData) in wrapper.journals.enumerated() {
+                    print("   📝 日记 \(index + 1):")
+                    print("      ID: \(journalData.id)")
+                    print("      标题: \(journalData.title)")
+                    print("      内容: \(journalData.content.prefix(100))\(journalData.content.count > 100 ? "..." : "")")
+                    print("      创建时间: \(journalData.created_at ?? "null")")
+                    print("      更新时间: \(journalData.updated_at ?? "null")")
+                    print("      情绪: \(journalData.emotion ?? "null")")
+                    print("      消息数量: \(journalData.messages.count)")
+                    print("      会话ID: \(journalData.session_id)")
+                    
+                    // 打印消息内容
+                    for (msgIndex, message) in journalData.messages.enumerated() {
+                        print("       消息 \(msgIndex + 1): role=\(message.role), content=\(message.content.prefix(50))\(message.content.count > 50 ? "..." : "")")
+                    }
+                    print("")
                 }
-                print("")
+                
+                let chatRecords = wrapper.journals.compactMap { journalData -> ChatRecord? in
+                    return convertJournalDataToChatRecord(journalData)
+                }
+                
+                print("✅ 日记列表接口 - 成功获取 \(chatRecords.count) 条日记")
+                return chatRecords
+                
+            } catch {
+                print("❌ 日记列表接口 - JSON解析失败: \(error)")
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("   原始响应: \(responseString)")
+                }
+                throw JournalListServiceError.invalidResponse
             }
-            
-            let chatRecords = wrapper.journals.compactMap { journalData -> ChatRecord? in
-                return convertJournalDataToChatRecord(journalData)
-            }
-            
-            print("✅ 日记列表接口 - 成功获取 \(chatRecords.count) 条日记")
-            return chatRecords
-            
         } catch let error as JournalListServiceError {
             throw error
         } catch {
@@ -192,7 +213,7 @@ class JournalListService {
             backendId: journalData.id, // 保存后端ID
             date: createdDate, // 使用创建时间
             messages: messages,
-            summary: journalData.content,
+            summary: journalData.contentHtml, // 使用净化后的HTML内容
             emotion: emotion,
             title: journalData.title
         )

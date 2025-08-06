@@ -8,41 +8,17 @@
 import SwiftUI
 
 struct MainView: View {
-    @State private var emotions: [EmotionType] = []
-    @State private var initialMessage: String = ""
-    @State private var sessionID: String = UUID().uuidString
-    @State private var chatActive: Bool = false
-    @State private var selectedRecord: ChatRecord? = nil
-    @State private var records: [ChatRecord] = RecordManager.loadAll()
-    @State private var showLogoutAlert = false
+    @State private var navigationPath = NavigationPath()
     @State private var currentBackgroundColor: Color = Color(.systemGroupedBackground)
-    @State private var navigateToJournalId: Int? = nil // 控制导航到日记详情
-    @State private var showJournalList = false // 控制显示日记列表
-    @State private var showSettings = false // 控制显示设置页面
-    @Namespace private var tabAnim
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 // 主要内容 - 情绪选择页面
                 ContentView(
-                    onTriggerChat: { emotion, message in
-                        self.emotions = [emotion]
-                        self.initialMessage = message
-                        self.sessionID = UUID().uuidString
-                        DispatchQueue.main.async {
-                            self.chatActive = true
-                        }
-                    },
-                    emotions: $emotions,
+                    navigationPath: $navigationPath,
                     onBackgroundColorChange: { color in
                         self.currentBackgroundColor = color
-                    },
-                    navigateToJournalId: $navigateToJournalId,
-                    onNavigateToJournal: { journalId in
-                        // 显示日记列表并导航到详情
-                        self.navigateToJournalId = journalId
-                        self.showJournalList = true
                     }
                 )
                 .transition(.opacity)
@@ -54,7 +30,7 @@ struct MainView: View {
                         
                         // 日记按钮
                         Button(action: {
-                            showJournalList = true
+                            navigationPath.append(AppRoute.journalList)
                         }) {
                             Image(systemName: "book.fill")
                                 .font(.system(size: 20, weight: .medium))
@@ -64,7 +40,7 @@ struct MainView: View {
                         
                         // 设置按钮
                         Button(action: {
-                            showSettings = true
+                            navigationPath.append(AppRoute.settings)
                         }) {
                             Image(systemName: "gearshape.fill")
                                 .font(.system(size: 20, weight: .medium))
@@ -81,34 +57,28 @@ struct MainView: View {
             .ignoresSafeArea(.keyboard)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             
-            // 日记详情导航现在在ChatHistoryView内部处理
-            
-            // 导航到聊天页面
-            .navigationDestination(isPresented: $chatActive) {
-                ChatView(
-                    emotions: $emotions,
-                    initialMessage: initialMessage,
-                    sessionID: sessionID,
-                    selectedRecord: $selectedRecord
-                )
+            // 统一的路由处理
+            .navigationDestination(for: AppRoute.self) { route in
+                createView(for: route)
             }
-            
-            // 导航到日记列表
-            .navigationDestination(isPresented: $showJournalList) {
-                ChatHistoryView(
-                    selectedRecord: $selectedRecord,
-                    navigateToJournalId: navigateToJournalId,
-                    onNavigationComplete: {
-                        // 导航完成后清除状态
-                        navigateToJournalId = nil
-                    }
-                )
-            }
-            
-            // 导航到设置页面
-            .navigationDestination(isPresented: $showSettings) {
-                SettingsView()
-            }
+        }
+    }
+    
+    @ViewBuilder
+    private func createView(for route: AppRoute) -> some View {
+        switch route {
+        case .chat(let emotion, let initialMessage):
+            ChatView(emotion: emotion, initialMessage: initialMessage, navigationPath: $navigationPath)
+        case .journalCreate(let emotion):
+            JournalEditView(initialEmotion: emotion, navigationPath: $navigationPath)
+        case .journalEdit(let record):
+            JournalEditView(record: record, navigationPath: $navigationPath)
+        case .journalList:
+            ChatHistoryView(navigationPath: $navigationPath)
+        case .journalDetail(let id):
+            JournalDetailContainerView(journalId: id, navigationPath: $navigationPath)
+        case .settings:
+            SettingsView()
         }
     }
     

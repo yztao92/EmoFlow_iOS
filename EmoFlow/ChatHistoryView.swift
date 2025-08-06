@@ -2,14 +2,9 @@ import SwiftUI
 
 /// 聊天历史记录视图，展示心情日记列表
 struct ChatHistoryView: View {
-    @Binding var selectedRecord: ChatRecord?
     @State private var records: [ChatRecord] = []
     @State private var selectedTab: Int = 0 // 0: 列表, 1: 洞察
-    @State private var showEditView = false // 控制编辑页面显示
-    @State private var editingRecord: ChatRecord? = nil // 正在编辑的记录
-    @State private var showDetailView = false // 控制详情页面显示
-    var navigateToJournalId: Int? = nil // 接收导航目标
-    var onNavigationComplete: (() -> Void)? = nil // 导航完成后的回调
+    @Binding var navigationPath: NavigationPath
     
     // 按日期排序的记录
     private var sortedRecords: [ChatRecord] {
@@ -58,44 +53,23 @@ struct ChatHistoryView: View {
         }
         .background(Color(.systemGray6))
         .navigationTitle("日记")
-        .onAppear { 
-            loadRecords()
-            // 如果有导航目标，查找对应的记录并导航
-            if let journalId = navigateToJournalId {
-                if let record = findRecordByJournalId(journalId) {
-                    selectedRecord = record
-                    // 导航完成后清除状态
-                    onNavigationComplete?()
+        .navigationBarBackButtonHidden(true)  // 隐藏系统默认的返回按钮
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("返回") {
+                    // 统一使用 removeLast() 返回
+                    if !navigationPath.isEmpty {
+                        navigationPath.removeLast()
+                    }
                 }
             }
         }
-        .navigationDestination(isPresented: $showEditView) {
-            if let record = editingRecord {
-                JournalEditView(
-                    initialEmotion: record.emotion ?? .peaceful,
-                    isEditMode: true,
-                    editJournalId: record.backendId,
-                    onJournalUpdated: { journalId in
-                        // 编辑完成后刷新列表
-                        Task {
-                            await refreshJournals()
-                        }
-                    },
-                    initialTitle: record.title ?? "",
-                    initialContent: record.summary
-                )
-            }
-        }
-        .navigationDestination(isPresented: $showDetailView) {
-            if let record = selectedRecord {
-                ChatrecordDetailView(record: record, onSave: { newSummary in
-                    record.summary = newSummary
-                    // 刷新本地数据
-                    if let index = records.firstIndex(where: { $0.id == record.id }) {
-                        records[index] = record
-                    }
-                })
-            }
+        .onAppear { 
+            print("🔍 ChatHistoryView - onAppear")
+            
+            // 正常加载本地数据
+            loadRecords()
+            print("   records count: \(records.count)")
         }
     }
     
@@ -106,14 +80,34 @@ struct ChatHistoryView: View {
                 JournalEntryCard(
                     record: record,
                     onTap: {
-                        selectedRecord = record
-                        showDetailView = true
-                        // 手动点击时也清除导航状态
-                        onNavigationComplete?()
+                        // 确保使用最新的数据
+                        if let backendId = record.backendId {
+                            // 尝试从后端获取最新的日记详情
+                            Task {
+                                do {
+                                    let detailRecord = try await JournalDetailService.shared.fetchJournalDetail(journalId: backendId)
+                                    await MainActor.run {
+                                        // 直接调用回调，让 MainView 处理导航
+                                        navigationPath.append(AppRoute.journalDetail(id: backendId))
+                                    }
+                                } catch {
+                                    print("❌ 获取日记详情失败: \(error)")
+                                    // 如果获取失败，使用本地数据
+                                    navigationPath.append(AppRoute.journalDetail(id: backendId))
+                                }
+                            }
+                        } else {
+                            // 没有 backendId，无法导航
+                            print("⚠️ 无法导航：缺少 backendId")
+                        }
                     },
                     onEdit: {
-                        editingRecord = record
-                        showEditView = true
+                        // 编辑逻辑：调用 onJournalSelected 回调，让 MainView 处理导航
+                        if let backendId = record.backendId {
+                            // 这里需要一个新的路由来处理编辑模式
+                            // 暂时先导航到详情页面
+                            navigationPath.append(AppRoute.journalDetail(id: backendId))
+                        }
                     },
                     onDelete: {
                         delete(record)
@@ -155,10 +149,18 @@ struct ChatHistoryView: View {
     
     private func refreshJournals() async {
         do {
+            print("🔍 ChatHistoryView - 开始刷新日记列表")
             let newJournals = try await JournalListService.shared.fetchJournals(limit: 100, offset: 0)
+            print("   ✅ 从后端获取到 \(newJournals.count) 条日记")
+            print("   日记的 backendId: \(newJournals.map { $0.backendId ?? -1 })")
+            
             RecordManager.saveAll(newJournals)
+            print("   ✅ 已保存到本地存储")
+            
             await MainActor.run {
                 records = newJournals.sorted { $0.date > $1.date }
+                print("   ✅ 已更新 records，当前数量: \(records.count)")
+                print("   records 的 backendId: \(records.map { $0.backendId ?? -1 })")
             }
             print("✅ 日记列表刷新成功")
         } catch {
@@ -190,11 +192,6 @@ struct ChatHistoryView: View {
         } else {
             print("⚠️ 无法删除后端日记：缺少backendId")
         }
-    }
-    
-    private func editJournal(_ record: ChatRecord) {
-        editingRecord = record
-        showEditView = true
     }
 }
 
@@ -273,7 +270,7 @@ struct JournalEntryCard: View {
                     Spacer().frame(height: 20)
                     
                     // 4. 日记正文
-                    Text(record.summary.isEmpty ? "无内容" : record.summary)
+                    Text(record.plainTextContent)
                         .font(.system(size: 16, weight: .regular))
                         .foregroundColor(.secondary)
                         .lineLimit(3)

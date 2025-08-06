@@ -20,6 +20,7 @@ struct JournalResponse: Codable {
     let journal: String
     let title: String
     let status: String
+    let journal_id: Int? // 新增：日记ID
 }
 
 // MARK: - 自定义错误
@@ -27,6 +28,7 @@ enum JournalServiceError: Error, LocalizedError {
     case networkError(String)
     case invalidResponse
     case timeout
+    case unauthorized
     
     var errorDescription: String? {
         switch self {
@@ -36,6 +38,8 @@ enum JournalServiceError: Error, LocalizedError {
             return "服务器响应格式错误"
         case .timeout:
             return "请求超时，请检查网络连接"
+        case .unauthorized:
+            return "用户未授权，请重新登录"
         }
     }
 }
@@ -51,7 +55,7 @@ class JournalService {
     func generateJournal(
         emotions: [EmotionType],
         messages: [ChatMessageDTO]
-    ) async throws -> (String, String) {  // 返回 (journal, title)
+    ) async throws -> (String, String, Int?) {  // 返回 (journal, title, journal_id)
         // 1. 构造 URLRequest
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -117,7 +121,23 @@ class JournalService {
                 if let responseString = String(data: data, encoding: .utf8) {
                     print("   Response Body: \(responseString)")
                 }
-                throw JournalServiceError.networkError("HTTP \(httpResponse.statusCode)")
+                
+                // 添加 401 特殊处理
+                if httpResponse.statusCode == 401 {
+                    // 清除本地 token
+                    UserDefaults.standard.removeObject(forKey: "userToken")
+                    UserDefaults.standard.removeObject(forKey: "userName")
+                    UserDefaults.standard.removeObject(forKey: "userEmail")
+                    
+                    // 发送登出通知
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .logout, object: nil)
+                    }
+                    
+                    throw JournalServiceError.unauthorized
+                } else {
+                    throw JournalServiceError.networkError("HTTP \(httpResponse.statusCode)")
+                }
             }
 
             // 6. 解析并返回
@@ -130,6 +150,7 @@ class JournalService {
             print("   Parsed Journal: \(wrapper.journal)")
             print("   Parsed Title: \(wrapper.title)")
             print("   Parsed Status: \(wrapper.status)")
+            print("   Parsed Journal ID: \(wrapper.journal_id ?? -1)")
             
             // 检查状态
             guard wrapper.status == "success" else {
@@ -144,7 +165,7 @@ class JournalService {
             }
             
             print("✅ 日记接口 - 成功生成日记")
-            return (wrapper.journal, wrapper.title)
+            return (wrapper.journal, wrapper.title, wrapper.journal_id)
             
         } catch let error as JournalServiceError {
             throw error

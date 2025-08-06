@@ -63,7 +63,23 @@ class JournalUpdateService {
             let errorMessage = String(data: data, encoding: .utf8) ?? "未知错误"
             print("❌ 日记更新接口 - HTTP错误: \(httpResponse.statusCode)")
             print("❌ 日记更新接口 - 错误信息: \(errorMessage)")
-            throw NetworkError.httpError(httpResponse.statusCode, errorMessage)
+            
+            // 添加 401 特殊处理
+            if httpResponse.statusCode == 401 {
+                // 清除本地 token
+                UserDefaults.standard.removeObject(forKey: "userToken")
+                UserDefaults.standard.removeObject(forKey: "userName")
+                UserDefaults.standard.removeObject(forKey: "userEmail")
+                
+                // 发送登出通知
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .logout, object: nil)
+                }
+                
+                throw NetworkError.unauthorized
+            } else {
+                throw NetworkError.httpError(httpResponse.statusCode, errorMessage)
+            }
         }
         
         do {

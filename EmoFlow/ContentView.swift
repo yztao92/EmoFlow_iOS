@@ -7,70 +7,7 @@ extension Color {
     static let buttonText = Color(red: 0.90, green: 0.96, blue: 0.94)
 }
 
-// MARK: - 弹窗组件
-struct ActionSheetView: View {
-    let emotionType: EmotionType
-    let onChat: () -> Void
-    let onRecord: () -> Void
-    let onDismiss: () -> Void
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // 半透明背景
-            Color.black.opacity(0.4)
-                .onTapGesture {
-                    onDismiss()
-                }
-            
-            // 弹窗内容
-            VStack(spacing: 16) {
-                // 标题
-                Text("选择操作")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .padding(.top, 20)
-                
-                // 按钮
-                VStack(spacing: 12) {
-                    // 和我聊聊按钮
-                    Button(action: onChat) {
-                        HStack {
-                            Image(systemName: "message.fill")
-                                .font(.system(size: 16))
-                            Text("和我聊聊")
-                                .font(.system(size: 16, weight: .medium))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(Color.blue)
-                        .cornerRadius(12)
-                    }
-                    
-                    // 记录按钮
-                    Button(action: onRecord) {
-                        HStack {
-                            Image(systemName: "book.fill")
-                                .font(.system(size: 16))
-                            Text("记录")
-                                .font(.system(size: 16, weight: .medium))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .background(Color.green)
-                        .cornerRadius(12)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
-            }
-            .background(Color(.systemBackground))
-            .cornerRadius(16, corners: [.topLeft, .topRight])
-        }
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-    }
-}
+
 
 // MARK: - 情绪数据模型
 struct EmotionData {
@@ -173,28 +110,7 @@ struct GreetingView: View {
     }
 }
 
-// MARK: - 上滑提示组件
-struct SwipeUpHintView: View {
-    let titleColor: Color
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "arrow.up")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(titleColor)
-            
-            Text("上滑继续")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(titleColor)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white.opacity(0.1))
-        )
-    }
-}
+
 
 // MARK: - 情绪图标组件
 struct EmotionIconView: View {
@@ -267,16 +183,10 @@ struct EmotionSelectionArea: View {
 
 // MARK: - 主内容视图
 struct ContentView: View {
-    var onTriggerChat: (EmotionType, String) -> Void
-    @Binding var emotions: [EmotionType]
+    @Binding var navigationPath: NavigationPath
     var onBackgroundColorChange: ((Color) -> Void)? = nil
-    @Binding var navigateToJournalId: Int?
-    var onNavigateToJournal: ((Int) -> Void)? = nil
 
     @State private var currentEmotionIndex: Int = 3 // 默认显示平和
-    @State private var showJournalEdit: Bool = false // 控制日记编辑页面显示
-    @State private var showActionSheet: Bool = false // 控制弹窗显示
-    @State private var selectedEmotionForAction: EmotionType? // 记录当前选中的情绪用于弹窗操作
     
     private var currentEmotion: EmotionData {
         EmotionData.emotions[currentEmotionIndex]
@@ -311,8 +221,42 @@ struct ContentView: View {
 
                 Spacer()
                 
-                // 上滑提示
-                SwipeUpHintView(titleColor: currentEmotion.titleColor)
+                // 底部按钮区域
+                HStack(spacing: 16) {
+                    // 记录一下按钮（outline样式）
+                    Button(action: {
+                        let emotionType = convertEmotionDataToEmotionType(currentEmotion)
+                        navigationPath.append(AppRoute.journalCreate(emotion: emotionType))
+                    }) {
+                        Text("记录一下")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(currentEmotion.titleColor)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(currentEmotion.titleColor, lineWidth: 1.5)
+                            )
+                    }
+                    
+                    // 和我聊聊按钮（filled样式）
+                    Button(action: {
+                        let emotionType = convertEmotionDataToEmotionType(currentEmotion)
+                        let chatMessage = getEmotionChatMessage(emotionType)
+                        navigationPath.append(AppRoute.chat(emotion: emotionType, initialMessage: chatMessage))
+                    }) {
+                        Text("和我聊聊")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(currentEmotion.titleColor)
+                            )
+                    }
+                }
+                .padding(.horizontal, 20)
                     .padding(.bottom, 40)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -322,6 +266,12 @@ struct ContentView: View {
             }
             .onAppear {
                 onBackgroundColorChange?(currentEmotion.backgroundColor)
+                // 更新用户名状态
+                currentUserName = UserDefaults.standard.string(forKey: "userName") ?? ""
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .userNameUpdated)) { _ in
+                // 监听用户名更新通知
+                currentUserName = UserDefaults.standard.string(forKey: "userName") ?? ""
             }
             .gesture(
                 DragGesture()
@@ -331,9 +281,8 @@ struct ContentView: View {
                     }
                     .onEnded { value in
                         let horizontalThreshold: CGFloat = 80
-                        let verticalThreshold: CGFloat = 60
                         
-                        // 计算水平和垂直移动的距离
+                        // 只保留水平滑动切换情绪的功能
                         let horizontalDistance = abs(value.translation.width)
                         let verticalDistance = abs(value.translation.height)
                         
@@ -347,52 +296,16 @@ struct ContentView: View {
                                 // 向左滑动，切换到下一个情绪
                                 switchToNextEmotion()
                             }
-                        } else {
-                            // 垂直移动为主
-                            if value.translation.height < -verticalThreshold {
-                                // 向上滑动，显示弹窗
-                                selectedEmotionForAction = convertEmotionDataToEmotionType(currentEmotion)
-                                showActionSheet = true
-                            }
                         }
                     }
             )
-            .navigationDestination(isPresented: $showJournalEdit) {
-                JournalEditView(
-                    initialEmotion: convertEmotionDataToEmotionType(currentEmotion),
-                    onJournalCreated: { journalId in
-                        // 创建成功后，关闭编辑页面并跳转到日记详情页面
-                        showJournalEdit = false
-                        navigateToJournalDetail(journalId: journalId)
-                    }
-                )
-            }
-            
-            // 弹窗
-            if showActionSheet {
-                ActionSheetView(
-                    emotionType: selectedEmotionForAction ?? .peaceful,
-                    onChat: {
-                        showActionSheet = false
-                        if let emotionType = selectedEmotionForAction {
-                            let chatMessage = getEmotionChatMessage(emotionType)
-                            onTriggerChat(emotionType, chatMessage)
-                        }
-                    },
-                    onRecord: {
-                        showActionSheet = false
-                        showJournalEdit = true
-                    },
-                    onDismiss: {
-                        showActionSheet = false
-                    }
-                )
-                .animation(.easeInOut(duration: 0.3), value: showActionSheet)
-            }
+
         }
     }
 
     // MARK: - 私有方法
+    @State private var currentUserName: String = UserDefaults.standard.string(forKey: "userName") ?? ""
+    
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
         let timeGreeting: String
@@ -406,10 +319,14 @@ struct ContentView: View {
             timeGreeting = "晚上好"
         }
         
-        // 从UserDefaults获取真实用户名
-        let userName = UserDefaults.standard.string(forKey: "userName") ?? "用户"
+        // 使用当前用户名状态，如果为空则只显示时间问候
+        let trimmedUserName = currentUserName.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        return "\(timeGreeting), \(userName)～"
+        if !trimmedUserName.isEmpty {
+            return "\(timeGreeting), \(trimmedUserName)～"
+        } else {
+            return "\(timeGreeting)～"
+        }
     }
     
     private func switchToNextEmotion() {
@@ -622,10 +539,7 @@ struct ContentView: View {
         }
     }
     
-    private func navigateToJournalDetail(journalId: Int) {
-        navigateToJournalId = journalId
-        onNavigateToJournal?(journalId)
-    }
+
 }
 
 // MARK: - 圆角扩展

@@ -86,6 +86,16 @@ class JournalDeleteService {
                 }
                 
                 if httpResponse.statusCode == 401 {
+                    // 清除本地 token
+                    UserDefaults.standard.removeObject(forKey: "userToken")
+                    UserDefaults.standard.removeObject(forKey: "userName")
+                    UserDefaults.standard.removeObject(forKey: "userEmail")
+                    
+                    // 发送登出通知
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .logout, object: nil)
+                    }
+                    
                     throw JournalDeleteServiceError.unauthorized
                 } else if httpResponse.statusCode == 404 {
                     throw JournalDeleteServiceError.notFound

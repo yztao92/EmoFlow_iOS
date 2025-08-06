@@ -24,10 +24,11 @@ struct ChatAnswer: Codable {
 }
 
 // MARK: - 自定义错误
-enum ChatServiceError: Error, LocalizedError {
+enum ChatServiceError: Error, LocalizedError, Equatable {
     case networkError(String)
     case invalidResponse
     case timeout
+    case unauthorized
 
     var errorDescription: String? {
         switch self {
@@ -37,6 +38,8 @@ enum ChatServiceError: Error, LocalizedError {
             return "服务器响应格式错误"
         case .timeout:
             return "请求超时，请检查网络连接"
+        case .unauthorized:
+            return "用户未授权，请重新登录"
         }
     }
 }
@@ -47,10 +50,49 @@ class ChatService {
     private init() {}
 
     private let url = URL(string: "https://emoflow.net.cn/chat")!
-    private let timeoutInterval: TimeInterval = 30.0
+    private let timeoutInterval: TimeInterval = 60.0  // 增加到60秒
 
     /// 发送聊天请求
     func sendMessage(
+        sessionID: String,
+        emotions: [EmotionType],
+        messages: [ChatMessageDTO]
+    ) async throws -> (String, [String]) {
+        let maxRetries = 3
+        var lastError: Error?
+        
+        for attempt in 1...maxRetries {
+            do {
+                return try await performSendMessage(sessionID: sessionID, emotions: emotions, messages: messages)
+            } catch let error as ChatServiceError {
+                if error == .timeout && attempt < maxRetries {
+                    print("⚠️ 第 \(attempt) 次请求超时，准备重试...")
+                    lastError = error
+                    // 等待一段时间后重试
+                    try await Task.sleep(nanoseconds: UInt64(attempt * 2) * 1_000_000_000) // 2秒、4秒、6秒
+                    continue
+                } else {
+                    throw error
+                }
+            } catch {
+                if (error as NSError).code == NSURLErrorTimedOut && attempt < maxRetries {
+                    print("⚠️ 第 \(attempt) 次请求超时，准备重试...")
+                    lastError = error
+                    // 等待一段时间后重试
+                    try await Task.sleep(nanoseconds: UInt64(attempt * 2) * 1_000_000_000) // 2秒、4秒、6秒
+                    continue
+                } else {
+                    throw error
+                }
+            }
+        }
+        
+        // 所有重试都失败了
+        throw lastError ?? ChatServiceError.timeout
+    }
+    
+    /// 执行实际的发送消息请求
+    private func performSendMessage(
         sessionID: String,
         emotions: [EmotionType],
         messages: [ChatMessageDTO]
@@ -104,7 +146,22 @@ class ChatService {
                 throw ChatServiceError.invalidResponse
             }
             guard httpResponse.statusCode == 200 else {
-                throw ChatServiceError.networkError("HTTP \(httpResponse.statusCode)")
+                // 添加 401 特殊处理
+                if httpResponse.statusCode == 401 {
+                    // 清除本地 token
+                    UserDefaults.standard.removeObject(forKey: "userToken")
+                    UserDefaults.standard.removeObject(forKey: "userName")
+                    UserDefaults.standard.removeObject(forKey: "userEmail")
+                    
+                    // 发送登出通知
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .logout, object: nil)
+                    }
+                    
+                    throw ChatServiceError.unauthorized
+                } else {
+                    throw ChatServiceError.networkError("HTTP \(httpResponse.statusCode)")
+                }
             }
 
             // 5. 解码并返回结果
