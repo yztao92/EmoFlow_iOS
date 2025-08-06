@@ -46,18 +46,24 @@ struct ChatView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
+                // 聊天内容区域
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            Color.clear.frame(height: 32)
+                            // 顶部间距
+                            Color.clear.frame(height: 16)
                             
                             if messages.isEmpty && !isLoading {
-                                // 空状态
-                                VStack {
+                                // 空状态 - ChatGPT风格
+                                VStack(spacing: 20) {
                                     Spacer()
-                                    Text("暂无消息")
+                                    Image("AIicon")
+                                        .resizable()
+                                        .frame(width: 60, height: 60)
                                         .foregroundColor(.gray)
-                                        .font(.body)
+                                    Text("EmoFlow")
+                                        .font(.title2)
+                                        .foregroundColor(.gray)
                                     Spacer()
                                 }
                             } else {
@@ -70,117 +76,83 @@ struct ChatView: View {
                                     aiAvatarImageName: "AIicon"
                                 )
                                 
-                                // 添加底部间距，确保键盘和内容之间有足够空间
-                                Color.clear.frame(height: 60)
+                                // 底部间距
+                                Color.clear.frame(height: 20)
                                     .id("bottomSpacing")
                             }
                         }
+                        .id("messages")
                     }
-                    .scrollDismissesKeyboard(.immediately) // 立即隐藏键盘
-                    .scrollIndicators(.hidden) // 隐藏滚动指示器
-                    // 使用两参数 onChange，避免单参废弃警告
+                    .scrollDismissesKeyboard(.immediately)
+                    .scrollIndicators(.hidden)
                     .onChange(of: messages.count) { oldCount, newCount in
                         guard newCount > oldCount else { return }
                         withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo("bottomSpacing", anchor: .bottom)
+                            proxy.scrollTo("messages", anchor: .bottom)
                         }
                     }
-                    // 监听loading状态变化，确保loading时滚动到底部
                     .onChange(of: isLoading) { oldValue, newValue in
-                        print("🔍 ChatView - isLoading 变化: \(oldValue) -> \(newValue)")
-                        
                         if newValue {
-                            // 开始loading时，滚动到底部间距
-                            print("✅ ChatView - 开始loading，滚动到底部间距")
                             withAnimation(.easeOut(duration: 0.2)) {
-                                proxy.scrollTo("bottomSpacing", anchor: .bottom)
+                                proxy.scrollTo("messages", anchor: .bottom)
                             }
                         }
                     }
-                    // 确保总是滚动到底部间距
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                proxy.scrollTo("bottomSpacing", anchor: .bottom)
+                    .onChange(of: isKeyboardVisible) { oldValue, newValue in
+                        if newValue {
+                            // 键盘显示时，滚动到底部确保内容可见
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                withAnimation(.easeOut(duration: 0.3)) {
+                                    proxy.scrollTo("messages", anchor: .bottom)
+                                }
                             }
                         }
                     }
                 }
 
-                // 输入区域
+                // 输入区域 - 键盘适配
                 VStack(spacing: 0) {
-                    // 分隔线
                     Divider()
-                        .background(Color(.systemGray4))
                     
-                    // 输入框和发送按钮
-                    HStack(spacing: 12) {
-                        // 输入框
-                        TextField("输入消息...", text: $inputText, axis: .vertical)
+                    HStack(spacing: 8) {
+                        TextField("消息", text: $inputText, axis: .vertical)
                             .textFieldStyle(PlainTextFieldStyle())
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(Color(.systemGray6))
-                            )
-                            .frame(minHeight: 40, maxHeight: 100)
-                            .onSubmit {
-                                send()
-                            }
-                            // 进一步优化键盘处理
-                            .onTapGesture {
-                                // 使用更短的延迟，减少响应时间
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                    // 确保输入框获得焦点
-                                }
-                            }
-                            // 添加键盘优化
-                            .textInputAutocapitalization(.sentences)
-                            .disableAutocorrection(true)
-                            .textContentType(.none)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(8)
                         
-                        // 发送按钮
                         Button(action: send) {
                             Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 32))
+                                .font(.system(size: 28))
                                 .foregroundColor(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : .blue)
                         }
                         .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                 }
                 .background(Color(.systemBackground))
+                .padding(.bottom, isKeyboardVisible ? 0 : 0)
             }
             .background(Color(.systemBackground))
-            .ignoresSafeArea(.keyboard, edges: .bottom) // 优化键盘处理
+            .animation(.easeOut(duration: 0.3), value: isKeyboardVisible)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
-                // 键盘即将显示时的优化
-                print("🔍 ChatView - 键盘即将显示")
-                isKeyboardVisible = true
-                
-                // 获取键盘高度
-                if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
-                    keyboardHeight = keyboardFrame.height
-                }
-                
-                // 延迟滚动，避免卡顿
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        // 滚动到底部
+                withAnimation(.easeOut(duration: 0.3)) {
+                    isKeyboardVisible = true
+                    if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                        keyboardHeight = keyboardFrame.height
                     }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-                // 键盘显示完成后的优化
-                print("🔍 ChatView - 键盘显示完成")
+                // 键盘显示完成
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                // 键盘即将隐藏时的优化
-                print("🔍 ChatView - 键盘即将隐藏")
-                isKeyboardVisible = false
-                keyboardHeight = 0
+                withAnimation(.easeOut(duration: 0.3)) {
+                    isKeyboardVisible = false
+                    keyboardHeight = 0
+                }
             }
             .alert(isPresented: $showSavedAlert) {
                 Alert(title: Text("已存档"),
