@@ -116,7 +116,6 @@ struct ChatHistoryView: View {
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
-
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
@@ -152,15 +151,15 @@ struct ChatHistoryView: View {
             print("🔍 ChatHistoryView - 开始刷新日记列表")
             let newJournals = try await JournalListService.shared.fetchJournals(limit: 100, offset: 0)
             print("   ✅ 从后端获取到 \(newJournals.count) 条日记")
-            print("   日记的 backendId: \(newJournals.map { $0.backendId ?? -1 })")
             
             RecordManager.saveAll(newJournals)
             print("   ✅ 已保存到本地存储")
             
             await MainActor.run {
-                records = newJournals.sorted { $0.date > $1.date }
+                withAnimation {
+                    records = newJournals.sorted { $0.date > $1.date }
+                }
                 print("   ✅ 已更新 records，当前数量: \(records.count)")
-                print("   records 的 backendId: \(records.map { $0.backendId ?? -1 })")
             }
             print("✅ 日记列表刷新成功")
         } catch {

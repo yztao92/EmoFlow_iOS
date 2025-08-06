@@ -49,4 +49,15 @@ extension EmotionType {
         case .happiness: return "幸福"
         }
     }
+    
+    var emotionDataName: String {
+        switch self {
+        case .angry: return "哼，气死我得了"
+        case .sad: return "唉，哭了"
+        case .unhappy: return "今天我是不大高兴了"
+        case .peaceful: return "无风无浪的一天"
+        case .happy: return "今天蛮开心的"
+        case .happiness: return "满满的幸福"
+        }
+    }
 }

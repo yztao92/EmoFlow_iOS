@@ -78,9 +78,7 @@ class JournalListService {
         // 添加认证token
         if let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty {
             request.addValue(token, forHTTPHeaderField: "token")
-            print("🔍 日记列表接口 - 添加认证token: \(token.prefix(10))...")
         } else {
-            print("⚠️ 日记列表接口 - 未找到用户token")
             throw JournalListServiceError.unauthorized
         }
         
@@ -92,8 +90,6 @@ class JournalListService {
         ]
         request.url = components.url
         
-        print("🔍 日记列表接口 - 请求URL: \(request.url?.absoluteString ?? "")")
-        
         // 2. 发送网络请求
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -103,15 +99,7 @@ class JournalListService {
                 throw JournalListServiceError.invalidResponse
             }
             
-            print("🔍 日记列表接口 - 后端响应:")
-            print("   HTTP Status Code: \(httpResponse.statusCode)")
-            
             guard httpResponse.statusCode == 200 else {
-                print("❌ 日记列表接口 - HTTP错误: \(httpResponse.statusCode)")
-                if let responseString = String(data: data, encoding: .utf8) {
-                    print("   Response Body: \(responseString)")
-                }
-                
                 if httpResponse.statusCode == 401 {
                     throw JournalListServiceError.unauthorized
                 } else {
@@ -120,48 +108,17 @@ class JournalListService {
             }
             
             // 4. 解析响应数据
-            print("🔍 日记列表接口 - 解析响应数据:")
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("   Raw Response: \(responseString)")
-            }
-            
             do {
                 let wrapper = try JSONDecoder().decode(JournalListResponse.self, from: data)
-                print("   Parsed Journals Count: \(wrapper.journals.count)")
-                print("   Total: \(wrapper.total)")
                 
                 // 5. 转换为ChatRecord格式
-                print("🔍 日记列表接口 - 开始转换日记数据:")
-                print("   总日记数: \(wrapper.journals.count)")
-                print("   分页信息: limit=\(wrapper.limit), offset=\(wrapper.offset), total=\(wrapper.total)")
-                
-                for (index, journalData) in wrapper.journals.enumerated() {
-                    print("   📝 日记 \(index + 1):")
-                    print("      ID: \(journalData.id)")
-                    print("      标题: \(journalData.title)")
-                    print("      内容: \(journalData.content.prefix(100))\(journalData.content.count > 100 ? "..." : "")")
-                    print("      创建时间: \(journalData.created_at ?? "null")")
-                    print("      更新时间: \(journalData.updated_at ?? "null")")
-                    print("      情绪: \(journalData.emotion ?? "null")")
-                    print("      消息数量: \(journalData.messages.count)")
-                    print("      会话ID: \(journalData.session_id)")
-                    
-                    // 打印消息内容
-                    for (msgIndex, message) in journalData.messages.enumerated() {
-                        print("       消息 \(msgIndex + 1): role=\(message.role), content=\(message.content.prefix(50))\(message.content.count > 50 ? "..." : "")")
-                    }
-                    print("")
-                }
-                
                 let chatRecords = wrapper.journals.compactMap { journalData -> ChatRecord? in
                     return convertJournalDataToChatRecord(journalData)
                 }
                 
-                print("✅ 日记列表接口 - 成功获取 \(chatRecords.count) 条日记")
                 return chatRecords
                 
             } catch {
-                print("❌ 日记列表接口 - JSON解析失败: \(error)")
                 if let responseString = String(data: data, encoding: .utf8) {
                     print("   原始响应: \(responseString)")
                 }
@@ -183,30 +140,23 @@ class JournalListService {
         do {
             let journals = try await fetchJournals(limit: 100, offset: 0) // 获取更多数据
             RecordManager.saveAll(journals)
-            print("✅ 日记列表同步成功，共 \(journals.count) 条")
         } catch {
-            print("❌ 日记列表同步失败: \(error)")
+            // 日记列表同步失败
         }
     }
     
     /// 将后端JournalData转换为前端ChatRecord
     private func convertJournalDataToChatRecord(_ journalData: JournalData) -> ChatRecord? {
-        print("🔄 转换日记 ID \(journalData.id):")
-        
         // 转换消息格式
         let messages = journalData.messages.map { dto in
             ChatMessage(role: dto.role == "user" ? .user : .assistant, content: dto.content)
         }
-        print("   消息数量: \(messages.count)")
         
         // 使用创建时间作为主要时间
         let createdDate = parseBackendTime(journalData.created_at)
         
-        print("   创建时间: \(journalData.created_at ?? "null") -> 解析后: \(createdDate)")
-        
         // 转换情绪类型（从后端emotion字段获取）
         let emotion = convertBackendEmotionToEmotionType(journalData.emotion)
-        print("   后端情绪: \(journalData.emotion ?? "null") -> 转换后: \(emotion.rawValue)")
         
         let chatRecord = ChatRecord(
             id: UUID(), // 前端使用UUID，后端使用Int
@@ -218,7 +168,6 @@ class JournalListService {
             title: journalData.title
         )
         
-        print("   ✅ 转换完成: 标题=\(chatRecord.title ?? "无标题"), 情绪=\(emotion.rawValue)")
         return chatRecord
     }
     
@@ -248,38 +197,29 @@ class JournalListService {
         }
         
         // 如果所有格式都失败，返回当前时间
-        print("⚠️ 无法解析时间格式: \(timeString)，使用当前时间")
         return Date()
     }
     
     /// 将后端emotion字段转换为EmotionType
     private func convertBackendEmotionToEmotionType(_ backendEmotion: String?) -> EmotionType {
         guard let emotion = backendEmotion else {
-            print("   -> 后端emotion为空，默认使用peaceful")
             return .peaceful
         }
         
         switch emotion.lowercased() {
         case "angry":
-            print("   -> 后端emotion: angry")
             return .angry
         case "sad":
-            print("   -> 后端emotion: sad")
             return .sad
         case "unhappy":
-            print("   -> 后端emotion: unhappy")
             return .unhappy
         case "happy":
-            print("   -> 后端emotion: happy")
             return .happy
         case "happiness":
-            print("   -> 后端emotion: happiness")
             return .happiness
         case "peaceful":
-            print("   -> 后端emotion: peaceful")
             return .peaceful
         default:
-            print("   -> 后端emotion: \(emotion) (未知类型，默认使用peaceful)")
             return .peaceful
         }
     }

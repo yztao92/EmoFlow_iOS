@@ -505,17 +505,17 @@ struct ContentView: View {
     
     private func convertEmotionDataToEmotionType(_ emotionData: EmotionData) -> EmotionType {
         switch emotionData.name {
-        case "哼，气死我得了":
+        case EmotionType.angry.emotionDataName:
             return .angry
-        case "唉，哭了":
+        case EmotionType.sad.emotionDataName:
             return .sad
-        case "今天我是不大高兴了":
+        case EmotionType.unhappy.emotionDataName:
             return .unhappy
-        case "无风无浪的一天":
+        case EmotionType.peaceful.emotionDataName:
             return .peaceful
-        case "今天蛮开心的":
+        case EmotionType.happy.emotionDataName:
             return .happy
-        case "满满的幸福":
+        case EmotionType.happiness.emotionDataName:
             return .happiness
         default:
             return .peaceful

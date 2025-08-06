@@ -4,17 +4,18 @@ struct JournalEditView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var navigationPath: NavigationPath
     @State private var title: String = ""
-    @State private var content: String = ""
+    @State private var attributedText: NSAttributedString = NSAttributedString(string: "")
     @State private var selectedEmotion: EmotionType
     @State private var isSaving = false
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
     
     // 富文本编辑状态
-    @State private var isBold = false
-    @State private var isItalic = false
-    @State private var textAlignment: TextAlignment = .leading
-    @State private var isTextEditorFocused = false
+    @State private var textAlignment: NSTextAlignment = .center
+    @State private var showRichTextToolbar = false
+    
+    // 富文本编辑器引用
+    @State private var textViewRef: UITextView?
     
     // 创建成功后的回调
     var onJournalCreated: ((Int) -> Void)? = nil
@@ -30,20 +31,27 @@ struct JournalEditView: View {
     
     init(initialEmotion: EmotionType = .peaceful, navigationPath: Binding<NavigationPath>, isEditMode: Bool = false, editJournalId: Int? = nil, initialTitle: String = "", initialContent: String = "", initialHTMLContent: String = "") {
         self._selectedEmotion = State(initialValue: initialEmotion)
-        self._title = State(initialValue: initialTitle)
+        // 创建模式时，标题默认为情绪数据名称
+        let defaultTitle = isEditMode ? initialTitle : initialEmotion.emotionDataName
+        self._title = State(initialValue: defaultTitle)
         self._navigationPath = navigationPath
         
-        // 处理初始内容：如果是HTML，转换为纯文本用于编辑
-        let plainText = initialContent.isHTML ? initialContent.htmlToString() : initialContent
-        self._content = State(initialValue: plainText)
-        
-        // 从HTML内容中解析富文本格式信息
+        // 处理初始内容：从HTML转换为富文本
         if !initialHTMLContent.isEmpty {
-            let (parsedBold, parsedItalic, parsedAlignment) = parseHTMLFormat(initialHTMLContent)
-            self._isBold = State(initialValue: parsedBold)
-            self._isItalic = State(initialValue: parsedItalic)
-            self._textAlignment = State(initialValue: parsedAlignment)
+            self._attributedText = State(initialValue: RichTextHelper.htmlToAttributedString(initialHTMLContent))
+        } else if !initialContent.isEmpty {
+            self._attributedText = State(initialValue: NSAttributedString(string: initialContent))
+        } else {
+            // 创建空的富文本，默认居中对齐
+            let emptyAttributedString = NSMutableAttributedString(string: "")
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.alignment = .center
+            emptyAttributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: 0))
+            self._attributedText = State(initialValue: emptyAttributedString)
         }
+        
+        // 默认居中对齐
+        self._textAlignment = State(initialValue: .center)
         
         self.isEditMode = isEditMode
         self.editJournalId = editJournalId
@@ -55,71 +63,21 @@ struct JournalEditView: View {
         self._title = State(initialValue: record.title ?? "")
         self._navigationPath = navigationPath
         
-        // 处理初始内容：如果是HTML，转换为纯文本用于编辑
-        let plainText = record.plainTextContent.isHTML ? record.plainTextContent.htmlToString() : record.plainTextContent
-        self._content = State(initialValue: plainText)
-        
-        // 从HTML内容中解析富文本格式信息
-        if !record.htmlContent.isEmpty {
-            let (parsedBold, parsedItalic, parsedAlignment) = parseHTMLFormat(record.htmlContent)
-            self._isBold = State(initialValue: parsedBold)
-            self._isItalic = State(initialValue: parsedItalic)
-            self._textAlignment = State(initialValue: parsedAlignment)
+        // 处理初始内容：从HTML转换为富文本
+        if !record.summary.isEmpty {
+            self._attributedText = State(initialValue: RichTextHelper.htmlToAttributedString(record.summary))
+        } else {
+            self._attributedText = State(initialValue: NSAttributedString(string: ""))
         }
+        
+        // 默认居中对齐
+        self._textAlignment = State(initialValue: .center)
         
         self.isEditMode = true
         self.editJournalId = record.backendId
     }
     
-    // 从HTML内容中解析富文本格式
-    private func parseHTMLFormat(_ htmlContent: String) -> (isBold: Bool, isItalic: Bool, alignment: TextAlignment) {
-        var isBold = false
-        var isItalic = false
-        var alignment: TextAlignment = .leading // 默认左对齐
-        
-        // 检查是否包含粗体标签
-        if htmlContent.contains("<strong>") || htmlContent.contains("<b>") {
-            isBold = true
-        }
-        
-        // 检查是否包含斜体标签
-        if htmlContent.contains("<em>") || htmlContent.contains("<i>") {
-            isItalic = true
-        }
-        
-        // 检查对齐方式 - 只检查 <p> 标签的 class 属性
-        if let pTagRange = htmlContent.range(of: "<p[^>]*>", options: .regularExpression) {
-            let pTagStart = htmlContent.index(pTagRange.lowerBound, offsetBy: 2) // 跳过 "<p"
-            let pTagEnd = htmlContent.index(pTagRange.upperBound, offsetBy: -1) // 跳过 ">"
-            let pTagContent = String(htmlContent[pTagStart..<pTagEnd])
-            
-            // 检查 class 属性
-            if pTagContent.contains("class=\"") {
-                if let classStart = pTagContent.range(of: "class=\"") {
-                    let classValueStart = pTagContent.index(classStart.upperBound, offsetBy: 0)
-                    if let classEnd = pTagContent.range(of: "\"", range: classValueStart..<pTagContent.endIndex) {
-                        let classValue = String(pTagContent[classValueStart..<classEnd.lowerBound])
-                        
-                        if classValue.contains("text-center") {
-                            alignment = .center
-                        } else if classValue.contains("text-right") {
-                            alignment = .trailing
-                        } else {
-                            alignment = .leading
-                        }
-                    }
-                }
-            } else {
-                // 没有 class 属性，默认为左对齐
-                alignment = .leading
-            }
-        } else {
-            // 没有找到 <p> 标签，默认为左对齐
-            alignment = .leading
-        }
-        
-        return (isBold, isItalic, alignment)
-    }
+
     
     var body: some View {
         ZStack {
@@ -160,7 +118,7 @@ struct JournalEditView: View {
                         
                         // 标题输入
                         TextField("给这段心情起个标题...", text: $title)
-                            .font(.system(size: 24, weight: .semibold))
+                            .font(.system(size: 28, weight: .semibold))
                             .foregroundColor(.primary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 16)
@@ -169,23 +127,18 @@ struct JournalEditView: View {
                         
                         // 富文本内容输入
                         VStack(alignment: .leading, spacing: 0) {
-                            RichTextEditor(
-                                text: $content,
-                                isBold: $isBold,
-                                isItalic: $isItalic,
-                                textAlignment: $textAlignment,
-                                placeholder: "写下你的心情..."
+                            SimpleRichTextEditor(
+                                attributedText: $attributedText,
+                                placeholder: "写下你的心情...",
+                                textViewRef: $textViewRef,
+                                shouldFocus: !isEditMode
                             )
                             .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 400)
-                            
-                            // 占位符（当内容为空时显示）
-                            if content.isEmpty {
-                                Text("写下你的心情...")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.secondary)
-                                    .padding(.top, 8)
-                                    .padding(.leading, 4)
-                                    .allowsHitTesting(false)
+                            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TextEditorFocused"))) { _ in
+                                showRichTextToolbar = true
+                            }
+                            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TextEditorUnfocused"))) { _ in
+                                showRichTextToolbar = false
                             }
                         }
                         .padding(.horizontal, 16)
@@ -196,73 +149,40 @@ struct JournalEditView: View {
                 }
                 
                 // 富文本编辑工具栏 - 固定在底部，键盘上方
-                if isTextEditorFocused {
-                    VStack(spacing: 0) {
-                        Divider()
-                            .background(Color(.systemGray4))
-                        
-                        HStack(spacing: 16) {
-                            // 对齐方式按钮
-                            Button(action: {
-                                switch textAlignment {
-                                case .leading:
-                                    textAlignment = .center
-                                case .center:
-                                    textAlignment = .trailing
-                                case .trailing:
-                                    textAlignment = .leading
-                                }
-                            }) {
-                                Image(systemName: getAlignmentIcon())
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.primary)
-                                    .frame(width: 32, height: 32)
-                                    .background(Color(.systemGray5))
-                                    .cornerRadius(8)
+                if showRichTextToolbar {
+                    RichTextToolbar(
+                        onBold: {
+                            if let textView = textViewRef {
+                                print("🔍 应用粗体")
+                                RichTextHelper.applyBold(to: textView)
+                            } else {
+                                print("❌ textViewRef 为空")
+                            }
+                        },
+                        onAlignment: {
+                            // 循环切换对齐方式
+                            switch textAlignment {
+                            case .left:
+                                textAlignment = .center
+                            case .center:
+                                textAlignment = .right
+                            case .right:
+                                textAlignment = .left
+                            default:
+                                textAlignment = .center
                             }
                             
-                            // 粗体按钮
-                            Button(action: {
-                                isBold.toggle()
-                            }) {
-                                Image(systemName: isBold ? "bold.fill" : "bold")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(isBold ? .blue : .primary)
-                                    .frame(width: 32, height: 32)
-                                    .background(Color(.systemGray5))
-                                    .cornerRadius(8)
+                            if let textView = textViewRef {
+                                print("🔍 应用对齐方式: \(textAlignment)")
+                                print("🔍 当前 textView.textAlignment: \(textView.textAlignment)")
+                                RichTextHelper.setAlignment(textAlignment, for: textView)
+                                print("🔍 应用后 textView.textAlignment: \(textView.textAlignment)")
+                            } else {
+                                print("❌ textViewRef 为空")
                             }
-                            
-                            // 斜体按钮
-                            Button(action: {
-                                isItalic.toggle()
-                            }) {
-                                Image(systemName: isItalic ? "italic.fill" : "italic")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(isItalic ? .blue : .primary)
-                                    .frame(width: 32, height: 32)
-                                    .background(Color(.systemGray5))
-                                    .cornerRadius(8)
-                            }
-                            
-                            Spacer()
-                            
-                            // 图片上传按钮（预留）
-                            Button(action: {
-                                // TODO: 实现图片上传功能
-                            }) {
-                                Image(systemName: "photo")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.primary)
-                                    .frame(width: 32, height: 32)
-                                    .background(Color(.systemGray5))
-                                    .cornerRadius(8)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(Color.clear)
-                    }
+                        },
+                        currentAlignment: textAlignment
+                    )
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
@@ -311,7 +231,7 @@ struct JournalEditView: View {
                         .font(.system(size: 18, weight: .medium))
                         .foregroundColor(.blue)
                 }
-                .disabled(title.isEmpty || content.isEmpty || isSaving)
+                .disabled(title.isEmpty || attributedText.string.isEmpty || isSaving)
             }
         }
         .alert("保存失败", isPresented: $showErrorAlert) {
@@ -319,44 +239,83 @@ struct JournalEditView: View {
         } message: {
             Text(errorMessage)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TextEditorFocused"))) { _ in
-            isTextEditorFocused = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TextEditorUnfocused"))) { _ in
-            isTextEditorFocused = false
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            isTextEditorFocused = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            isTextEditorFocused = false
+
+
+        .onAppear {
+            // 创建模式时，延迟一下再聚焦到文本编辑器
+            if !isEditMode {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showRichTextToolbar = true
+                }
+            }
         }
     }
     
     // 获取对齐图标
     private func getAlignmentIcon() -> String {
         switch textAlignment {
-        case .leading:
+        case .left:
             return "text.alignleft"
         case .center:
             return "text.aligncenter"
-        case .trailing:
+        case .right:
             return "text.alignright"
+        case .justified:
+            return "text.aligncenter"
+        case .natural:
+            return "text.aligncenter"
+        @unknown default:
+            return "text.aligncenter"
         }
     }
     
+
+    
+
+    
+    // 简化的保存逻辑
     private func saveJournal() {
-        // 收起键盘
+        // 防止重复保存
+        guard !isSaving else { return }
+        
+        // 隐藏键盘
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         
         // 显示 loading 状态
         isSaving = true
         
+        // 直接获取富文本内容并保存
+        let htmlContent = RichTextHelper.convertToHTML(attributedText)
+        saveJournalWithHTML(htmlContent)
+    }
+    
+
+    
+    // 根据日记情绪获取对应的背景颜色
+    private func getEmotionBackgroundColor() -> Color? {
+        // 直接根据情绪类型返回对应的背景颜色
+        switch selectedEmotion {
+        case .happy:
+            return Color.orange.opacity(0.3)
+        case .sad:
+            return Color.blue.opacity(0.3)
+        case .angry:
+            return Color.red.opacity(0.3)
+        case .peaceful:
+            return Color.green.opacity(0.3)
+        case .happiness:
+            return Color.yellow.opacity(0.3)
+        case .unhappy:
+            return Color.purple.opacity(0.3)
+        }
+    }
+    
+    private func saveJournalWithHTML(_ htmlContent: String) {
+        // 显示 loading 状态
+        isSaving = true
+        
         Task {
             do {
-                // 将纯文本转换为HTML格式保存，应用富文本格式
-                let htmlContent = convertToHTML(content, isBold: isBold, isItalic: isItalic, alignment: textAlignment)
-                
                 if isEditMode {
                     // 编辑模式：更新日记
                     guard let journalId = editJournalId else {
@@ -406,102 +365,6 @@ struct JournalEditView: View {
                     showErrorAlert = true
                 }
             }
-        }
-    }
-    
-    // 将纯文本转换为HTML，应用富文本格式
-    private func convertToHTML(_ text: String, isBold: Bool, isItalic: Bool, alignment: TextAlignment) -> String {
-        var htmlText = text
-        
-        // 应用对齐方式（全局）
-        let alignClass: String
-        switch alignment {
-        case .leading:
-            alignClass = "text-left"
-        case .center:
-            alignClass = "text-center"
-        case .trailing:
-            alignClass = "text-right"
-        }
-        
-        // 如果有富文本格式，应用格式
-        if isBold || isItalic {
-            var formattedText = htmlText
-            
-            // 应用粗体
-            if isBold {
-                formattedText = "<strong>\(formattedText)</strong>"
-            }
-            
-            // 应用斜体
-            if isItalic {
-                formattedText = "<em>\(formattedText)</em>"
-            }
-            
-            htmlText = formattedText
-        }
-        
-        // 包装在段落标签中，应用对齐样式
-        let htmlContent = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    font-size: 16px;
-                    line-height: 1.5;
-                    color: #000000;
-                    margin: 0;
-                    padding: 0;
-                    background: transparent;
-                }
-                p {
-                    margin: 0 0 12px 0;
-                }
-                strong {
-                    font-weight: 600;
-                }
-                em {
-                    font-style: italic;
-                }
-                .text-center {
-                    text-align: center;
-                }
-                .text-left {
-                    text-align: left;
-                }
-                .text-right {
-                    text-align: right;
-                }
-            </style>
-        </head>
-        <body>
-            <p class="\(alignClass)">\(htmlText)</p>
-        </body>
-        </html>
-        """
-        
-        return htmlContent
-    }
-    
-    // 根据日记情绪获取对应的背景颜色
-    private func getEmotionBackgroundColor() -> Color? {
-        // 直接根据情绪类型返回对应的背景颜色
-        switch selectedEmotion {
-        case .happy:
-            return Color.orange.opacity(0.3)
-        case .sad:
-            return Color.blue.opacity(0.3)
-        case .angry:
-            return Color.red.opacity(0.3)
-        case .peaceful:
-            return Color.green.opacity(0.3)
-        case .happiness:
-            return Color.yellow.opacity(0.3)
-        case .unhappy:
-            return Color.purple.opacity(0.3)
         }
     }
 }

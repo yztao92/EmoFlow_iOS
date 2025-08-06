@@ -40,15 +40,25 @@ struct JournalContentView: View {
             
             // 内容显示 - 居中
             VStack(spacing: 36) {
-                // HTML渲染的内容
-                HTMLRenderView(
-                    htmlContent: content,
-                    textColor: .primary,
-                    isSafe: true
-                )
-                .frame(maxWidth: .infinity, minHeight: 200)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                // 使用UITextView显示富文本内容
+                if let attributedString = content.htmlToAttributedString() {
+                    RichTextDisplayView(
+                        attributedString: attributedString,
+                        textColor: .primary
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 200)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                } else {
+                    // 如果HTML转换失败，显示纯文本
+                    Text(content)
+                        .font(.system(size: 20))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 200)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                }
                 
                 // 日期显示在右下角
                 HStack {
