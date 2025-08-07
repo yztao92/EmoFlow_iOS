@@ -70,6 +70,9 @@ class JournalListService {
     
     /// 获取用户日记列表
     func fetchJournals(limit: Int = 20, offset: Int = 0) async throws -> [ChatRecord] {
+        print("🔍 JournalListService - 开始获取日记列表")
+        print("   请求参数: limit=\(limit), offset=\(offset)")
+        
         // 1. 构造 URLRequest
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -78,7 +81,9 @@ class JournalListService {
         // 添加认证token
         if let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty {
             request.addValue(token, forHTTPHeaderField: "token")
+            print("   ✅ 已添加认证token: \(token.prefix(10))...")
         } else {
+            print("   ❌ 未找到用户token")
             throw JournalListServiceError.unauthorized
         }
         
@@ -90,6 +95,8 @@ class JournalListService {
         ]
         request.url = components.url
         
+        print("   🔗 请求URL: \(request.url?.absoluteString ?? "")")
+        
         // 2. 发送网络请求
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -98,6 +105,8 @@ class JournalListService {
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw JournalListServiceError.invalidResponse
             }
+            
+            print("   📡 HTTP状态码: \(httpResponse.statusCode)")
             
             guard httpResponse.statusCode == 200 else {
                 if httpResponse.statusCode == 401 {
@@ -110,17 +119,19 @@ class JournalListService {
             // 4. 解析响应数据
             do {
                 let wrapper = try JSONDecoder().decode(JournalListResponse.self, from: data)
+                print("   📊 后端返回日记数量: \(wrapper.journals.count)")
                 
                 // 5. 转换为ChatRecord格式
                 let chatRecords = wrapper.journals.compactMap { journalData -> ChatRecord? in
                     return convertJournalDataToChatRecord(journalData)
                 }
                 
+                print("   ✅ 成功转换 \(chatRecords.count) 条日记记录")
                 return chatRecords
                 
             } catch {
                 if let responseString = String(data: data, encoding: .utf8) {
-                    print("   原始响应: \(responseString)")
+                    print("   ❌ 原始响应: \(responseString)")
                 }
                 throw JournalListServiceError.invalidResponse
             }
@@ -137,11 +148,17 @@ class JournalListService {
     
     /// 同步日记列表到本地缓存
     func syncJournals() async {
+        print("🔄 JournalListService - 开始同步日记列表")
         do {
             let journals = try await fetchJournals(limit: 100, offset: 0) // 获取更多数据
+            print("   ✅ 从后端获取到 \(journals.count) 条日记")
+            
             RecordManager.saveAll(journals)
+            print("   ✅ 已保存到本地缓存")
+            
+            print("✅ 日记列表同步成功")
         } catch {
-            // 日记列表同步失败
+            print("❌ 日记列表同步失败: \(error)")
         }
     }
     

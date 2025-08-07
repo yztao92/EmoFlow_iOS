@@ -26,7 +26,7 @@ struct ChatMessagesView: View {
                         Spacer()
                         TextBubbleView(
                             text: msg.content,
-                            color: userBubbleColor.opacity(0.95),
+                            color: ColorManager.inputFieldColor,
                             alignment: .trailing
                         )
                         Image(userEmojiImageName)

@@ -49,6 +49,9 @@ struct JournalContentView: View {
                     .frame(maxWidth: .infinity, minHeight: 200)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+                    .onAppear {
+                        print("📝 JournalContentView - 显示内容，长度: \(content.count)")
+                    }
                 } else {
                     // 如果HTML转换失败，显示纯文本
                     Text(content)

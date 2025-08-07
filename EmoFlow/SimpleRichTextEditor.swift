@@ -12,7 +12,7 @@ struct SimpleRichTextEditor: UIViewRepresentable {
     
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
-        textView.font = .systemFont(ofSize: 20) // 改为20pt，与HTML显示一致
+        textView.font = .systemFont(ofSize: 14, weight: .light) // 设置为Light样式
         textView.backgroundColor = UIColor.clear
         textView.textColor = UIColor.label // 使用系统标签颜色，自动适应深色/浅色模式
         textView.delegate = context.coordinator
@@ -24,7 +24,7 @@ struct SimpleRichTextEditor: UIViewRepresentable {
         textView.isSelectable = true
         
         // 设置字体渲染模式，确保支持 emoji
-        textView.font = .systemFont(ofSize: 20)
+        textView.font = .systemFont(ofSize: 14, weight: .light)
         textView.textColor = UIColor.label
         
         // 确保支持 emoji 输入
@@ -33,11 +33,11 @@ struct SimpleRichTextEditor: UIViewRepresentable {
         textView.autocapitalizationType = .sentences
         
         // 设置默认的输入属性，确保新输入的文本使用默认字体
-        let defaultFont = UIFont.systemFont(ofSize: 20)
+        let defaultFont = UIFont.systemFont(ofSize: 14, weight: .light)
         let defaultColor = UIColor.label
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .center // 默认居中对齐
-        paragraphStyle.lineSpacing = 8 // 设置行间距，与HTML的line-height: 1.4对应
+        paragraphStyle.lineSpacing = 12 // 设置行间距，让文本更易读
         
         textView.typingAttributes = [
             .font: defaultFont,
@@ -83,6 +83,11 @@ struct SimpleRichTextEditor: UIViewRepresentable {
         if shouldFocus && !textView.isFirstResponder {
             DispatchQueue.main.async {
                 textView.becomeFirstResponder()
+                // 聚焦到文本末尾
+                let length = textView.attributedText.length
+                if length > 0 {
+                    textView.selectedRange = NSRange(location: length, length: 0)
+                }
             }
         }
         
@@ -122,11 +127,11 @@ struct SimpleRichTextEditor: UIViewRepresentable {
             }
             
             // 确保新输入的文本使用默认字体属性
-            let defaultFont = UIFont.systemFont(ofSize: 20)
+            let defaultFont = UIFont.systemFont(ofSize: 20, weight: .light)
             let defaultColor = UIColor.label
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.alignment = .center // 默认居中对齐
-            paragraphStyle.lineSpacing = 8 // 设置行间距，与HTML的line-height: 1.4对应
+            paragraphStyle.lineSpacing = 16 // 设置行间距，让文本更易读
             
             textView.typingAttributes = [
                 .font: defaultFont,
@@ -145,7 +150,7 @@ struct SimpleRichTextEditor: UIViewRepresentable {
             }
             
             // 确保新输入的文本使用默认字体属性
-            let defaultFont = UIFont.systemFont(ofSize: 20)
+            let defaultFont = UIFont.systemFont(ofSize: 20, weight: .light)
             let defaultColor = UIColor.label
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.alignment = .center // 默认居中对齐
@@ -298,7 +303,7 @@ class RichTextHelper {
                     if let paragraphStyle = attributedString.attribute(.paragraphStyle, at: i, effectiveRange: nil) as? NSParagraphStyle {
                         let newParagraphStyle = NSMutableParagraphStyle()
                         newParagraphStyle.alignment = paragraphStyle.alignment
-                        newParagraphStyle.lineSpacing = 8 // 保持行间距
+                        newParagraphStyle.lineSpacing = 16 // 保持行间距
                         attributedString.addAttribute(.paragraphStyle, value: newParagraphStyle, range: NSRange(location: i, length: 1))
                     }
                 }
@@ -312,7 +317,7 @@ class RichTextHelper {
                     if let paragraphStyle = attributedString.attribute(.paragraphStyle, at: i, effectiveRange: nil) as? NSParagraphStyle {
                         let newParagraphStyle = NSMutableParagraphStyle()
                         newParagraphStyle.alignment = paragraphStyle.alignment
-                        newParagraphStyle.lineSpacing = 8 // 保持行间距
+                        newParagraphStyle.lineSpacing = 16 // 保持行间距
                         attributedString.addAttribute(.paragraphStyle, value: newParagraphStyle, range: NSRange(location: i, length: 1))
                     }
                 }
@@ -339,7 +344,7 @@ class RichTextHelper {
         let attributedString = NSMutableAttributedString(attributedString: textView.attributedText)
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = alignment
-        paragraphStyle.lineSpacing = 8 // 设置行间距，与HTML的line-height: 1.4对应
+        paragraphStyle.lineSpacing = 16 // 设置行间距，让文本更易读
         
         // 安全地应用段落样式
         if attributedString.length > 0 {
@@ -359,7 +364,20 @@ class RichTextHelper {
         }
     }
     
-        static func convertToHTML(_ attributedString: NSAttributedString) -> String {
+    static func convertToData(_ attributedString: NSAttributedString) -> Data? {
+        // 直接序列化为Data，避免HTML转换
+        return try? attributedString.data(from: NSRange(location: 0, length: attributedString.length), 
+                                        documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+    }
+    
+    static func attributedStringFromData(_ data: Data) -> NSAttributedString? {
+        // 从Data反序列化，避免HTML转换
+        return try? NSAttributedString(data: data, 
+                                     options: [.documentType: NSAttributedString.DocumentType.rtf], 
+                                     documentAttributes: nil)
+    }
+    
+    static func convertToHTML(_ attributedString: NSAttributedString) -> String {
         // 如果富文本为空，返回空字符串
         if attributedString.length == 0 {
             return ""

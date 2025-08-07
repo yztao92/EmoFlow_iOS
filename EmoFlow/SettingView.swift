@@ -9,7 +9,6 @@ import SwiftUI
 struct SettingsView: View {
     @State private var username: String = UserDefaults.standard.string(forKey: "userName") ?? ""
     @State private var userEmail: String = UserDefaults.standard.string(forKey: "userEmail") ?? ""
-    @State private var notificationsEnabled = UserDefaults.standard.bool(forKey: "notifications_enabled")
     @State private var showLogoutAlert = false
     @State private var showUsernameEditAlert = false
     @State private var tempUsername: String = ""
@@ -21,7 +20,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-            Form {
+        Form {
             Section(header: Text("账户信息")) {
                 HStack {
                     Text("用户名")
@@ -39,6 +38,7 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .listRowBackground(ColorManager.cardbackground)
                 
                 if !userEmail.isEmpty {
                     HStack {
@@ -46,29 +46,37 @@ struct SettingsView: View {
                         Spacer()
                         Text(userEmail)
                             .foregroundColor(.secondary)
-                        }
                     }
+                    .listRowBackground(ColorManager.cardbackground)
                 }
+            }
 
-                Section(header: Text("偏好设置")) {
-                    Toggle("新消息提醒", isOn: $notificationsEnabled)
-                    .onChange(of: notificationsEnabled) { _, newValue in
-                        UserDefaults.standard.set(newValue, forKey: "notifications_enabled")
-                    }
-                }
-
-                Section {
-                    Button(role: .destructive) {
+            Section {
+                Button(role: .destructive) {
                     showLogoutAlert = true
-                    } label: {
+                } label: {
                     HStack {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
                         Text("退出登录")
                     }
                 }
+                .listRowBackground(ColorManager.cardbackground)
+            }
         }
-        }
+        .scrollContentBackground(.hidden)
+        .background(ColorManager.sysbackground)
         .navigationTitle("设置")
+        .navigationBarBackButtonHidden(true)  // 隐藏系统默认的返回按钮
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: {
+                    dismiss()
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .medium))
+                }
+            }
+        }
         .alert("确认退出登录", isPresented: $showLogoutAlert) {
             Button("取消", role: .cancel) { }
             Button("退出登录", role: .destructive) {

@@ -7,6 +7,12 @@
 
 import Foundation
 
+// MARK: - 缓存数据结构
+struct CacheData: Codable {
+    let record: ChatRecord
+    let timestamp: Date
+}
+
 // MARK: - 响应结构
 struct JournalDetailResponse: Codable {
     let status: String
@@ -59,13 +65,12 @@ class JournalDetailService {
         // 添加认证token
         if let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty {
             request.addValue(token, forHTTPHeaderField: "token")
-            print("🔍 日记详情接口 - 添加认证token: \(token.prefix(10))...")
         } else {
             print("⚠️ 日记详情接口 - 未找到用户token")
             throw JournalDetailServiceError.unauthorized
         }
         
-        print("🔍 日记详情接口 - 请求URL: \(request.url?.absoluteString ?? "")")
+        print("🔍 日记详情接口 - 请求日记ID: \(journalId)")
         
         // 2. 发送网络请求
         do {
@@ -76,14 +81,10 @@ class JournalDetailService {
                 throw JournalDetailServiceError.invalidResponse
             }
             
-            print("🔍 日记详情接口 - 后端响应:")
-            print("   HTTP Status Code: \(httpResponse.statusCode)")
+            print("📡 日记详情接口 - HTTP状态码: \(httpResponse.statusCode)")
             
             guard httpResponse.statusCode == 200 else {
                 print("❌ 日记详情接口 - HTTP错误: \(httpResponse.statusCode)")
-                if let responseString = String(data: data, encoding: .utf8) {
-                    print("   Response Body: \(responseString)")
-                }
                 
                 if httpResponse.statusCode == 401 {
                     // 清除本地 token
@@ -105,21 +106,14 @@ class JournalDetailService {
             }
             
             // 4. 解析响应数据
-            print("🔍 日记详情接口 - 解析响应数据:")
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("   Raw Response: \(responseString)")
-            }
-            
             let wrapper = try JSONDecoder().decode(JournalDetailResponse.self, from: data)
-            print("   Parsed Journal ID: \(wrapper.journal.id)")
-            print("   Parsed Title: \(wrapper.journal.title)")
+            print("✅ 日记详情接口 - 成功获取日记详情，ID: \(wrapper.journal.id)")
             
             // 5. 转换为ChatRecord格式
             guard let chatRecord = convertJournalDataToChatRecord(wrapper.journal) else {
                 throw JournalDetailServiceError.invalidResponse
             }
             
-            print("✅ 日记详情接口 - 成功获取日记详情")
             return chatRecord
             
         } catch let error as JournalDetailServiceError {
@@ -137,9 +131,10 @@ class JournalDetailService {
     func fetchAndCacheJournalDetail(journalId: Int) async throws -> ChatRecord {
         let chatRecord = try await fetchJournalDetail(journalId: journalId)
         
-        // 缓存到本地
+        // 缓存到本地，包含缓存时间
         let cacheKey = "journal_detail_\(journalId)"
-        if let data = try? JSONEncoder().encode(chatRecord) {
+        let cacheData = CacheData(record: chatRecord, timestamp: Date())
+        if let data = try? JSONEncoder().encode(cacheData) {
             UserDefaults.standard.set(data, forKey: cacheKey)
             print("✅ 日记详情已缓存: \(cacheKey)")
         }
@@ -147,20 +142,50 @@ class JournalDetailService {
         return chatRecord
     }
     
+    /// 获取日记详情但不缓存（用于强制刷新）
+    func fetchJournalDetailWithoutCache(journalId: Int) async throws -> ChatRecord {
+        return try await fetchJournalDetail(journalId: journalId)
+    }
+    
     /// 从本地缓存获取日记详情
     func getCachedJournalDetail(journalId: Int) -> ChatRecord? {
         let cacheKey = "journal_detail_\(journalId)"
         guard let data = UserDefaults.standard.data(forKey: cacheKey),
-              let chatRecord = try? JSONDecoder().decode(ChatRecord.self, from: data) else {
+              let cacheData = try? JSONDecoder().decode(CacheData.self, from: data) else {
             return nil
         }
-        return chatRecord
+        
+        // 检查缓存是否过期（24小时）
+        let cacheAge = Date().timeIntervalSince(cacheData.timestamp)
+        let maxCacheAge: TimeInterval = 24 * 60 * 60 // 24小时
+        
+        if cacheAge > maxCacheAge {
+            print("⏰ 缓存已过期，清除: \(cacheKey)")
+            clearDetailCache(journalId: journalId)
+            return nil
+        }
+        
+        return cacheData.record
     }
     
     /// 检查日记详情是否已缓存
     func isDetailCached(journalId: Int) -> Bool {
         let cacheKey = "journal_detail_\(journalId)"
-        return UserDefaults.standard.data(forKey: cacheKey) != nil
+        guard let data = UserDefaults.standard.data(forKey: cacheKey),
+              let cacheData = try? JSONDecoder().decode(CacheData.self, from: data) else {
+            return false
+        }
+        
+        // 检查缓存是否过期
+        let cacheAge = Date().timeIntervalSince(cacheData.timestamp)
+        let maxCacheAge: TimeInterval = 24 * 60 * 60 // 24小时
+        
+        if cacheAge > maxCacheAge {
+            clearDetailCache(journalId: journalId)
+            return false
+        }
+        
+        return true
     }
     
     /// 清除日记详情缓存
@@ -172,33 +197,22 @@ class JournalDetailService {
     
     /// 将后端JournalData转换为前端ChatRecord
     private func convertJournalDataToChatRecord(_ journalData: JournalData) -> ChatRecord? {
-        print("🔄 JournalDetailService - 转换日记数据")
-        print("   后端情绪: \(journalData.emotion ?? "null")")
-        print("   原始内容: \(journalData.content.prefix(100))...")
-        print("   HTML内容: \(journalData.contentHtml.prefix(100))...")
-        print("   纯文本内容: \(journalData.contentPlain.prefix(100))...")
-        
         // 转换消息格式
         let messages = journalData.messages.map { dto in
             ChatMessage(role: dto.role == "user" ? .user : .assistant, content: dto.content)
         }
         
         // 转换时间格式，使用创建时间
-        print("   原始时间字符串: \(journalData.created_at ?? "null")")
         let date = parseBackendTime(journalData.created_at)
-        print("   转换后的时间: \(date)")
-        print("   当前时间: \(Date())")
         
         // 转换情绪类型（优先使用后端返回的emotion字段）
         let emotion: EmotionType
         if let backendEmotion = journalData.emotion {
             // 使用后端返回的情绪
             emotion = convertBackendEmotionToEmotionType(backendEmotion)
-            print("   ✅ 使用后端情绪: \(backendEmotion) -> \(emotion.rawValue)")
         } else {
             // 如果后端没有返回情绪，从内容中推断
             emotion = inferEmotionFromContent(journalData.content)
-            print("   ⚠️ 后端无情绪，从内容推断: \(emotion.rawValue)")
         }
         
         return ChatRecord(

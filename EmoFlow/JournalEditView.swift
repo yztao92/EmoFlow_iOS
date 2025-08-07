@@ -65,13 +65,35 @@ struct JournalEditView: View {
         
         // 处理初始内容：从HTML转换为富文本
         if !record.summary.isEmpty {
-            self._attributedText = State(initialValue: RichTextHelper.htmlToAttributedString(record.summary))
+            let attributedString = RichTextHelper.htmlToAttributedString(record.summary)
+            // 确保转换后的富文本有正确的行间距
+            let mutableAttributedString = NSMutableAttributedString(attributedString: attributedString)
+            let fullRange = NSRange(location: 0, length: mutableAttributedString.length)
+            
+            // 从原有富文本中提取对齐方式
+            var originalAlignment: NSTextAlignment = .center // 默认居中对齐
+            if mutableAttributedString.length > 0 {
+                if let paragraphStyle = mutableAttributedString.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle {
+                    originalAlignment = paragraphStyle.alignment
+                }
+            }
+            
+            // 应用行间距到整个文本，但保持原有的对齐方式
+            if mutableAttributedString.length > 0 {
+                let paragraphStyle = NSMutableParagraphStyle()
+                paragraphStyle.alignment = originalAlignment // 保持原有的对齐方式
+                paragraphStyle.lineSpacing = 16 // 设置行间距，让文本更易读
+                mutableAttributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
+            }
+            
+            self._attributedText = State(initialValue: mutableAttributedString)
+            // 使用原有的对齐方式
+            self._textAlignment = State(initialValue: originalAlignment)
         } else {
             self._attributedText = State(initialValue: NSAttributedString(string: ""))
+            // 空内容时默认居中对齐
+            self._textAlignment = State(initialValue: .center)
         }
-        
-        // 默认居中对齐
-        self._textAlignment = State(initialValue: .center)
         
         self.isEditMode = true
         self.editJournalId = record.backendId
@@ -91,7 +113,7 @@ struct JournalEditView: View {
             VStack(spacing: 0) {
                 // 编辑区域
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: 0) {
                         // 情绪选择
                         Button(action: {
                             switch selectedEmotion {
@@ -118,12 +140,13 @@ struct JournalEditView: View {
                         
                         // 标题输入
                         TextField("给这段心情起个标题...", text: $title)
-                            .font(.system(size: 28, weight: .semibold))
+                            .font(.system(size: 24, weight: .semibold))
                             .foregroundColor(.primary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 16)
                             .background(Color.clear)
                             .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.bottom, 8) // 添加title到正文的间距
                         
                         // 富文本内容输入
                         VStack(alignment: .leading, spacing: 0) {
@@ -131,7 +154,7 @@ struct JournalEditView: View {
                                 attributedText: $attributedText,
                                 placeholder: "写下你的心情...",
                                 textViewRef: $textViewRef,
-                                shouldFocus: !isEditMode
+                                shouldFocus: true
                             )
                             .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 400)
                             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TextEditorFocused"))) { _ in
@@ -145,7 +168,7 @@ struct JournalEditView: View {
                         
                         Spacer(minLength: 100)
                     }
-                    .padding(.top, 16)
+                    .padding(.top, 0)
                 }
                 
                 // 富文本编辑工具栏 - 固定在底部，键盘上方
@@ -219,7 +242,7 @@ struct JournalEditView: View {
                 }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.blue)
+                        .foregroundColor(getEmotionSecondaryColor())
                 }
             }
             
@@ -229,7 +252,7 @@ struct JournalEditView: View {
                 }) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.blue)
+                        .foregroundColor(getEmotionSecondaryColor())
                 }
                 .disabled(title.isEmpty || attributedText.string.isEmpty || isSaving)
             }
@@ -242,11 +265,26 @@ struct JournalEditView: View {
 
 
         .onAppear {
-            // 创建模式时，延迟一下再聚焦到文本编辑器
-            if !isEditMode {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    showRichTextToolbar = true
+            // 延迟一下再聚焦到文本编辑器
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                showRichTextToolbar = true
+                // 编辑模式下聚焦到文本末尾
+                if isEditMode {
+                    focusToEnd()
                 }
+            }
+        }
+    }
+    
+    // 聚焦到文本末尾
+    private func focusToEnd() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if let textView = textViewRef {
+                let length = textView.attributedText.length
+                if length > 0 {
+                    textView.selectedRange = NSRange(location: length, length: 0)
+                }
+                textView.becomeFirstResponder()
             }
         }
     }
@@ -293,20 +331,39 @@ struct JournalEditView: View {
     
     // 根据日记情绪获取对应的背景颜色
     private func getEmotionBackgroundColor() -> Color? {
-        // 直接根据情绪类型返回对应的背景颜色
+        // 根据情绪类型返回对应的 light 颜色
         switch selectedEmotion {
         case .happy:
-            return Color.orange.opacity(0.3)
+            return ColorManager.Happy.light
         case .sad:
-            return Color.blue.opacity(0.3)
+            return ColorManager.Sad.light
         case .angry:
-            return Color.red.opacity(0.3)
+            return ColorManager.Angry.light
         case .peaceful:
-            return Color.green.opacity(0.3)
+            return ColorManager.Peaceful.light
         case .happiness:
-            return Color.yellow.opacity(0.3)
+            return ColorManager.Happiness.light
         case .unhappy:
-            return Color.purple.opacity(0.3)
+            return ColorManager.Unhappy.light
+        }
+    }
+    
+    // 根据日记情绪获取对应的次要颜色
+    private func getEmotionSecondaryColor() -> Color {
+        // 根据情绪类型返回对应的 secondary 颜色
+        switch selectedEmotion {
+        case .happy:
+            return ColorManager.Happy.secondary
+        case .sad:
+            return ColorManager.Sad.secondary
+        case .angry:
+            return ColorManager.Angry.secondary
+        case .peaceful:
+            return ColorManager.Peaceful.secondary
+        case .happiness:
+            return ColorManager.Happiness.secondary
+        case .unhappy:
+            return ColorManager.Unhappy.secondary
         }
     }
     
@@ -334,10 +391,13 @@ struct JournalEditView: View {
                     
                     await MainActor.run {
                         isSaving = false
-                        // 清空导航栈，然后添加日记列表和详情页面
-                        navigationPath = NavigationPath()
-                        navigationPath.append(AppRoute.journalList)
-                        navigationPath.append(AppRoute.journalDetail(id: response.journal_id))
+                        // 发送日记更新通知
+                        print("📢 发送日记更新通知: journal_\(journalId)")
+                        NotificationCenter.default.post(name: .journalUpdated, object: journalId)
+                        // 直接返回上一级，让详情页面重新加载数据
+                        if !navigationPath.isEmpty {
+                            navigationPath.removeLast()
+                        }
                     }
                 } else {
                     // 创建模式：创建新日记
@@ -352,7 +412,10 @@ struct JournalEditView: View {
                     
                     await MainActor.run {
                         isSaving = false
-                        // 清空导航栈，然后添加日记列表和详情页面
+                        // 发送日记更新通知
+                        print("📢 发送日记更新通知: journal_\(response.journal_id)")
+                        NotificationCenter.default.post(name: .journalUpdated, object: response.journal_id)
+                        // 创建成功后清空导航栈，然后导航到新日记的详情页面
                         navigationPath = NavigationPath()
                         navigationPath.append(AppRoute.journalList)
                         navigationPath.append(AppRoute.journalDetail(id: response.journal_id))

@@ -11,7 +11,7 @@ struct ShareSheet: UIViewControllerRepresentable {
 }
 
 struct ChatrecordDetailView: View {
-    @ObservedObject var record: ChatRecord
+    let record: ChatRecord
     var onSave: ((String) -> Void)? = nil
     @Binding var navigationPath: NavigationPath
     @State private var selectedPage = 0
@@ -29,20 +29,43 @@ struct ChatrecordDetailView: View {
             return nil 
         }
         
-        // 直接根据情绪类型返回对应的背景颜色
+        // 根据情绪类型返回对应的 light 颜色
         switch emotion {
         case .happy:
-            return Color.orange.opacity(0.3)
+            return ColorManager.Happy.light
         case .sad:
-            return Color.blue.opacity(0.3)
+            return ColorManager.Sad.light
         case .angry:
-            return Color.red.opacity(0.3)
+            return ColorManager.Angry.light
         case .peaceful:
-            return Color.green.opacity(0.3)
+            return ColorManager.Peaceful.light
         case .happiness:
-            return Color.yellow.opacity(0.3)
+            return ColorManager.Happiness.light
         case .unhappy:
-            return Color.purple.opacity(0.3)
+            return ColorManager.Unhappy.light
+        }
+    }
+    
+    // 计算属性：根据日记情绪获取对应的次要颜色
+    private var emotionSecondaryColor: Color {
+        guard let emotion = record.emotion else { 
+            return .primary 
+        }
+        
+        // 根据情绪类型返回对应的 secondary 颜色
+        switch emotion {
+        case .happy:
+            return ColorManager.Happy.secondary
+        case .sad:
+            return ColorManager.Sad.secondary
+        case .angry:
+            return ColorManager.Angry.secondary
+        case .peaceful:
+            return ColorManager.Peaceful.secondary
+        case .happiness:
+            return ColorManager.Happiness.secondary
+        case .unhappy:
+            return ColorManager.Unhappy.secondary
         }
     }
 
@@ -94,15 +117,15 @@ struct ChatrecordDetailView: View {
                                                 .frame(width: 24, height: 24)
                                             Text(msg.content)
                                                 .padding(12)
-                                                .background(Color(.darkGray))
-                                                .foregroundColor(.white)
+                                                .background(Color.gray.opacity(0.18))
+                                                .foregroundColor(.primary)
                                                 .cornerRadius(16)
                                             Spacer()
                                         } else {
                                             Spacer()
                                             Text(msg.content)
                                                 .padding(12)
-                                                .background(Color(.secondarySystemBackground))
+                                                .background(ColorManager.inputFieldColor)
                                                 .foregroundColor(.primary)
                                                 .cornerRadius(16)
                                             Image((record.emotion?.iconName) ?? "Happy")
@@ -179,8 +202,8 @@ struct ChatrecordDetailView: View {
                             captureNoteContent()
                         }) {
                             Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.primary)
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(emotionSecondaryColor)
                         }
                         
                         // 编辑按钮
@@ -188,8 +211,8 @@ struct ChatrecordDetailView: View {
                             navigationPath.append(AppRoute.journalEdit(record: record))
                         }) {
                             Image(systemName: "pencil")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.primary)
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(emotionSecondaryColor)
                         }
                     }
                 } else if record.messages.isEmpty {
@@ -200,8 +223,8 @@ struct ChatrecordDetailView: View {
                             captureNoteContent()
                         }) {
                             Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.primary)
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(emotionSecondaryColor)
                         }
                         
                         // 编辑按钮
@@ -209,8 +232,8 @@ struct ChatrecordDetailView: View {
                             navigationPath.append(AppRoute.journalEdit(record: record))
                         }) {
                             Image(systemName: "pencil")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.primary)
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(emotionSecondaryColor)
                         }
                     }
                 }
@@ -227,48 +250,15 @@ struct ChatrecordDetailView: View {
                 selectedPage = 0
             }
             
+            // 移除重复的数据加载逻辑，因为 JournalDetailContainerView 已经处理了
             // 检查是否需要获取详情
-            if let backendId = record.backendId {
-                loadJournalDetailIfNeeded(backendId: backendId)
-            }
+            // if let backendId = record.backendId {
+            //     loadJournalDetailIfNeeded(backendId: backendId)
+            // }
         }
 
     }
     
-    // 加载日记详情（优先使用缓存）
-    private func loadJournalDetailIfNeeded(backendId: Int) {
-        // 首先尝试从缓存获取
-        if let cachedRecord = JournalDetailService.shared.getCachedJournalDetail(journalId: backendId) {
-            // 更新当前记录
-            record.messages = cachedRecord.messages
-            record.summary = cachedRecord.summary
-            record.title = cachedRecord.title
-            record.emotion = cachedRecord.emotion
-            return
-        }
-        
-        // 如果没有缓存，才请求后端
-        isLoadingDetail = true
-        
-        Task {
-            do {
-                let detailedRecord = try await JournalDetailService.shared.fetchAndCacheJournalDetail(journalId: backendId)
-                await MainActor.run {
-                    // 更新当前记录
-                    record.messages = detailedRecord.messages
-                    record.summary = detailedRecord.summary
-                    record.title = detailedRecord.title
-                    record.emotion = detailedRecord.emotion
-                    isLoadingDetail = false
-                }
-            } catch {
-                await MainActor.run {
-                    isLoadingDetail = false
-                }
-            }
-        }
-    }
-
     // 截图方法
     private func captureNoteContent() {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -400,7 +390,7 @@ struct CustomBackgroundView: View {
         ZStack {
             // 基础背景色
             if let emotionColor = emotionColor {
-                emotionColor.opacity(0.3) // 降低情绪背景色的透明度
+                emotionColor // 使用完整的情绪颜色，不降低透明度
             } else {
                 Color(.systemGroupedBackground)
             }

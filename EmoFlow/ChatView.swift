@@ -18,6 +18,42 @@ struct ChatView: View {
     }
     // 用户消息气泡颜色统一为微信风格灰色
     private let userBubbleColor: Color = Color(UIColor(red: 0.93, green: 0.93, blue: 0.95, alpha: 1))
+    
+    // 根据情绪获取背景颜色
+    private var emotionBackgroundColor: Color {
+        switch emotion {
+        case .happy:
+            return ColorManager.Happy.light
+        case .sad:
+            return ColorManager.Sad.light
+        case .angry:
+            return ColorManager.Angry.light
+        case .peaceful:
+            return ColorManager.Peaceful.light
+        case .happiness:
+            return ColorManager.Happiness.light
+        case .unhappy:
+            return ColorManager.Unhappy.light
+        }
+    }
+    
+    // 根据情绪获取次要颜色
+    private var emotionSecondaryColor: Color {
+        switch emotion {
+        case .happy:
+            return ColorManager.Happy.secondary
+        case .sad:
+            return ColorManager.Sad.secondary
+        case .angry:
+            return ColorManager.Angry.secondary
+        case .peaceful:
+            return ColorManager.Peaceful.secondary
+        case .happiness:
+            return ColorManager.Happiness.secondary
+        case .unhappy:
+            return ColorManager.Unhappy.secondary
+        }
+    }
 
     @State private var messages: [ChatMessage] = []
     @State private var inputText: String = ""
@@ -42,9 +78,14 @@ struct ChatView: View {
     @State private var showToast = false // toast状态
     @State private var toastMessage = "" // toast消息内容
     @State private var didTimeout = false // 超时标志
+    @FocusState private var isInputFocused: Bool
 
     var body: some View {
         ZStack {
+            // 背景色
+            emotionBackgroundColor
+                .ignoresSafeArea()
+            
             VStack(spacing: 0) {
                 // 聊天内容区域
                 ScrollViewReader { proxy in
@@ -119,23 +160,23 @@ struct ChatView: View {
                             .textFieldStyle(PlainTextFieldStyle())
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(Color(.systemGray6))
+                            .background(ColorManager.inputFieldColor)
                             .cornerRadius(8)
+                            .focused($isInputFocused)
                         
                         Button(action: send) {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 28))
-                                .foregroundColor(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : .blue)
+                                .foregroundColor(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : emotionSecondaryColor)
                         }
                         .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                 }
-                .background(Color(.systemBackground))
+                .background(emotionBackgroundColor)
                 .padding(.bottom, isKeyboardVisible ? 0 : 0)
             }
-            .background(Color(.systemBackground))
             .animation(.easeOut(duration: 0.3), value: isKeyboardVisible)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
                 withAnimation(.easeOut(duration: 0.3)) {
@@ -180,9 +221,29 @@ struct ChatView: View {
                     didInsertInitialMessage = true
                     send(message: initialMessage)
                 }
-
+                
+                // 延迟一下再聚焦到输入框，确保UI已经加载完成
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isInputFocused = true
+                }
             }
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        if !navigationPath.isEmpty {
+                            navigationPath.removeLast()
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("返回")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                    }
+                    .foregroundColor(emotionSecondaryColor)
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         // 收起键盘
@@ -190,16 +251,16 @@ struct ChatView: View {
                         // 生成日记
                         saveCurrentChat()
                     }) {
-                        Text("生成日记")
+                        Text("AI 日记")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(Color.accentColor)
+                            .foregroundColor(emotionSecondaryColor)
                     }
                 }
             }
-            .background(
-                LinearGradient(gradient: Gradient(colors: [Color(.systemGray6), Color(.systemBackground)]), startPoint: .top, endPoint: .bottom)
-                    .ignoresSafeArea()
-            )
+            .navigationBarBackButtonHidden(true)
+            .onAppear {
+                print("🎨 ChatView 背景颜色: \(emotionBackgroundColor)")
+            }
             
             // 全局loading遮罩
             if isSaving {
@@ -207,7 +268,7 @@ struct ChatView: View {
                     .ignoresSafeArea()
                 VStack(spacing: 16) {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: Color.accentColor))
+                        .progressViewStyle(CircularProgressViewStyle(tint: emotionSecondaryColor))
                         .scaleEffect(1.4)
                     Text("正在生成日记…")
                         .foregroundColor(.white)

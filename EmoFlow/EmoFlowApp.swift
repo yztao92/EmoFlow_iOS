@@ -48,4 +48,7 @@ extension Notification.Name {
     
     /// 用户名更新通知：当用户名更新时发送此通知
     static let userNameUpdated = Notification.Name("userNameUpdated")
+    
+    /// 日记更新通知：当日记被编辑或创建时发送此通知
+    static let journalUpdated = Notification.Name("journalUpdated")
 }

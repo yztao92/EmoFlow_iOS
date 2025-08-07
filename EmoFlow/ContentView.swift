@@ -1,91 +1,55 @@
 import SwiftUI
 import UIKit
 
-// MARK: - 颜色常量
-extension Color {
-    static let buttonBackground = Color(red: 0.16, green: 0.15, blue: 0.16)
-    static let buttonText = Color(red: 0.90, green: 0.96, blue: 0.94)
-}
-
-
-
 // MARK: - 情绪数据模型
 struct EmotionData {
     let name: String
     let assetName: String
-    let color: Color
-    let backgroundColor: Color
-    let cardBackgroundColor: Color
-    let titleColor: Color
-    let emotionTextColor: Color
-    let paginationColor: Color
+    let primary: Color
+    let secondary: Color
     
     static let emotions: [EmotionData] = [
         // 生气
         EmotionData(
             name: "哼，气死我得了",
             assetName: "Angry",
-            color: Color(red: 1, green: 0.52, blue: 0.24),
-            backgroundColor: Color(red: 1, green: 0.52, blue: 0.24), // FF843E
-            cardBackgroundColor: Color(red: 1, green: 0.52, blue: 0.24), // FF843E
-            titleColor: Color(red: 0.47, green: 0.18, blue: 0.02), // 782E04
-            emotionTextColor: Color(red: 0.57, green: 0.22, blue: 0.01), // 913704
-            paginationColor: Color(red: 1, green: 0.52, blue: 0.24) // FF843E
+            primary: ColorManager.Angry.primary,
+            secondary: ColorManager.Angry.secondary
         ),
         // 悲伤
         EmotionData(
             name: "唉，哭了",
             assetName: "Sad",
-            color: Color(red: 0.55, green: 0.64, blue: 0.93),
-            backgroundColor: Color(red: 0.55, green: 0.64, blue: 0.93), // 8CA4EE
-            cardBackgroundColor: Color(red: 0.55, green: 0.64, blue: 0.93), // 8CA4EE
-            titleColor: Color(red: 0.19, green: 0.23, blue: 0.33), // 313A54
-            emotionTextColor: Color(red: 0.21, green: 0.25, blue: 0.35), // 363F59
-            paginationColor: Color(red: 0.55, green: 0.64, blue: 0.93) // 8CA4EE
+            primary: ColorManager.Sad.primary,
+            secondary: ColorManager.Sad.secondary
         ),
         // 不开心
         EmotionData(
             name: "今天我是不大高兴了",
             assetName: "Unhappy",
-            color: Color(red: 0.63, green: 0.91, blue: 0.92),
-            backgroundColor: Color(red: 0.63, green: 0.91, blue: 0.92), // A1E7EB
-            cardBackgroundColor: Color(red: 0.63, green: 0.91, blue: 0.92), // A1E7EB
-            titleColor: Color(red: 0.23, green: 0.45, blue: 0.47), // 3A7478
-            emotionTextColor: Color(red: 0.21, green: 0.25, blue: 0.35), // 363F59
-            paginationColor: Color(red: 0.63, green: 0.91, blue: 0.92) // A1E7EB
+            primary: ColorManager.Unhappy.primary,
+            secondary: ColorManager.Unhappy.secondary
         ),
         // 平和
         EmotionData(
             name: "无风无浪的一天",
             assetName: "Peaceful",
-            color: Color(red: 0.36, green: 0.42, blue: 0.63),
-            backgroundColor: Color(red: 0.87, green: 0.92, blue: 1), // DFEBFF
-            cardBackgroundColor: Color(red: 0.87, green: 0.92, blue: 1), // DFEBFF
-            titleColor: Color(red: 0.31, green: 0.36, blue: 0.53), // 505D87
-            emotionTextColor: Color(red: 0.36, green: 0.42, blue: 0.63), // 5C6CA1
-            paginationColor: Color(red: 0.87, green: 0.92, blue: 1) // DFEBFF
+            primary: ColorManager.Peaceful.primary,
+            secondary: ColorManager.Peaceful.secondary
         ),
         // 开心
         EmotionData(
             name: "今天蛮开心的",
             assetName: "Happy",
-            color: Color(red: 0.99, green: 0.87, blue: 0.44),
-            backgroundColor: Color(red: 0.99, green: 0.87, blue: 0.44), // FDDD6F
-            cardBackgroundColor: Color(red: 0.99, green: 0.87, blue: 0.44), // FDDD6F
-            titleColor: Color(red: 0.40, green: 0.31, blue: 0), // 664F00
-            emotionTextColor: Color(red: 0.39, green: 0.33, blue: 0.13), // 635522
-            paginationColor: Color(red: 0.99, green: 0.87, blue: 0.44) // FDDD6F
+            primary: ColorManager.Happy.primary,
+            secondary: ColorManager.Happy.secondary
         ),
         // 幸福
         EmotionData(
             name: "满满的幸福",
             assetName: "Happiness",
-            color: Color(red: 0.63, green: 0.91, blue: 0.92),
-            backgroundColor: Color(red: 1, green: 0.65, blue: 0.74), // FFA7BC
-            cardBackgroundColor: Color(red: 1, green: 0.65, blue: 0.74), // FFA7BC
-            titleColor: Color(red: 0.30, green: 0.20, blue: 0.22), // 4D3238
-            emotionTextColor: Color(red: 0.40, green: 0.26, blue: 0.29), // 66424B
-            paginationColor: Color(red: 1, green: 0.65, blue: 0.74) // FFA7BC
+            primary: ColorManager.Happiness.primary,
+            secondary: ColorManager.Happiness.secondary
         )
     ]
 }
@@ -93,18 +57,18 @@ struct EmotionData {
 // MARK: - 问候语组件
 struct GreetingView: View {
     let greeting: String
-    let titleColor: Color
+    let secondaryColor: Color
     
     var body: some View {
         VStack(spacing: 16) {
             Text(greeting)
                 .font(.system(size: 32, weight: .bold))
-                .foregroundColor(titleColor)
+                .foregroundColor(secondaryColor)
                 .frame(maxWidth: .infinity, alignment: .center)
             
             Text("你今天过得好吗？")
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundColor(titleColor)
+                .foregroundColor(secondaryColor)
                 .frame(maxWidth: .infinity, alignment: .center)
         }
     }
@@ -117,13 +81,14 @@ struct EmotionIconView: View {
     let emotion: EmotionData
     let isSelected: Bool
     let onTap: () -> Void
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         Image(emotion.assetName)
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: isSelected ? 280 : 120, height: isSelected ? 280 : 120)
-            .opacity(isSelected ? 1.0 : 0.4)
+            .opacity(isSelected ? (colorScheme == .dark ? 0.8 : 1.0) : 0.4)
     }
 }
 
@@ -185,6 +150,8 @@ struct EmotionSelectionArea: View {
 struct ContentView: View {
     @Binding var navigationPath: NavigationPath
     var onBackgroundColorChange: ((Color) -> Void)? = nil
+    var onSecondaryColorChange: ((Color) -> Void)? = nil
+    @Environment(\.colorScheme) var colorScheme
 
     @State private var currentEmotionIndex: Int = 3 // 默认显示平和
     
@@ -196,7 +163,7 @@ struct ContentView: View {
         ZStack {
             VStack(spacing: 0) {
                 // 问候语区域
-                GreetingView(greeting: greeting, titleColor: currentEmotion.titleColor)
+                GreetingView(greeting: greeting, secondaryColor: currentEmotion.secondary)
                     .padding(.top, 120) // 问候语到右上角图标间距56px（64px + 56px）
 
                 // 情绪选择区域
@@ -213,7 +180,7 @@ struct ContentView: View {
                     // 情绪文字
                     Text(currentEmotion.name)
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(currentEmotion.emotionTextColor)
+                        .foregroundColor(currentEmotion.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(.top, 68) // 情绪图标和问候语间距68px
@@ -230,12 +197,12 @@ struct ContentView: View {
                     }) {
                         Text("记录一下")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(currentEmotion.titleColor)
+                            .foregroundColor(currentEmotion.secondary)
                             .frame(maxWidth: .infinity)
                             .frame(height: 48)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(currentEmotion.titleColor, lineWidth: 1.5)
+                                    .stroke(currentEmotion.secondary, lineWidth: 1.5)
                             )
                     }
                     
@@ -247,12 +214,12 @@ struct ContentView: View {
                     }) {
                         Text("和我聊聊")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundColor(currentEmotion.primary)
                             .frame(maxWidth: .infinity)
                             .frame(height: 48)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(currentEmotion.titleColor)
+                                    .fill(currentEmotion.secondary)
                             )
                     }
                 }
@@ -260,18 +227,27 @@ struct ContentView: View {
                     .padding(.bottom, 40)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(currentEmotion.backgroundColor)
-            .onChange(of: currentEmotion.backgroundColor) { _, newColor in
+            .background(currentEmotion.primary)
+            .onChange(of: currentEmotion.primary) { _, newColor in
                 onBackgroundColorChange?(newColor)
             }
+            .onChange(of: currentEmotion.secondary) { _, newColor in
+                onSecondaryColorChange?(newColor)
+            }
             .onAppear {
-                onBackgroundColorChange?(currentEmotion.backgroundColor)
+                onBackgroundColorChange?(currentEmotion.primary)
+                onSecondaryColorChange?(currentEmotion.secondary)
                 // 更新用户名状态
                 currentUserName = UserDefaults.standard.string(forKey: "userName") ?? ""
             }
             .onReceive(NotificationCenter.default.publisher(for: .userNameUpdated)) { _ in
                 // 监听用户名更新通知
                 currentUserName = UserDefaults.standard.string(forKey: "userName") ?? ""
+            }
+            .onChange(of: currentEmotionIndex) { _, _ in
+                // 当情绪切换时，更新颜色
+                onBackgroundColorChange?(currentEmotion.primary)
+                onSecondaryColorChange?(currentEmotion.secondary)
             }
             .gesture(
                 DragGesture()
@@ -305,6 +281,8 @@ struct ContentView: View {
 
     // MARK: - 私有方法
     @State private var currentUserName: String = UserDefaults.standard.string(forKey: "userName") ?? ""
+    
+
     
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())

@@ -87,6 +87,11 @@ class JournalUpdateService {
             print("✅ 日记更新接口 - 成功更新日记，ID: \(response.journal_id)")
             print("✅ 日记更新接口 - 更新字段: \(response.updated_fields)")
             print("✅ 日记更新接口 - 消息: \(response.message)")
+            
+            // 清除对应的详情缓存，确保下次访问时获取最新数据
+            JournalDetailService.shared.clearDetailCache(journalId: journalId)
+            print("🗑️ 已清除日记详情缓存: journal_\(journalId)")
+            
             return response
         } catch {
             print("❌ 日记更新接口 - 解析响应失败: \(error)")

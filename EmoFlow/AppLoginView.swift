@@ -258,10 +258,6 @@ struct AppLoginView: View {
                        let status = json["status"] as? String,
                        status == "ok" {
                         
-                        // 调试：打印后端返回的JSON数据
-                        print("🔍 后端返回数据:")
-                        print("   JSON: \(json)")
-                        
                         // 保存后端返回的用户信息到本地存储
                         let token = json["token"] as? String ?? ""  // JWT token
                         let userEmail = json["email"] as? String ?? ""  // 用户邮箱

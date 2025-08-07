@@ -4,6 +4,7 @@ import SwiftUI
 struct ChatHistoryView: View {
     @State private var records: [ChatRecord] = []
     @State private var selectedTab: Int = 0 // 0: 列表, 1: 洞察
+    @State private var isLoading = false // 添加加载状态
     @Binding var navigationPath: NavigationPath
     
     // 按日期排序的记录
@@ -22,7 +23,7 @@ struct ChatHistoryView: View {
                         .foregroundColor(selectedTab == 0 ? .blue : .primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .background(selectedTab == 0 ? Color(.systemGray6) : Color.clear)
+                        .background(selectedTab == 0 ? ColorManager.sysbackground : Color.clear)
                         .cornerRadius(8)
                 }
                 
@@ -32,13 +33,13 @@ struct ChatHistoryView: View {
                         .foregroundColor(selectedTab == 1 ? .blue : .primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .background(selectedTab == 1 ? Color(.systemGray6) : Color.clear)
+                        .background(selectedTab == 1 ? ColorManager.sysbackground : Color.clear)
                         .cornerRadius(8)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
-            .background(Color(.systemBackground))
+            .background(ColorManager.cardbackground)
             .cornerRadius(12)
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -51,16 +52,19 @@ struct ChatHistoryView: View {
                 insightsView
             }
         }
-        .background(Color(.systemGray6))
+        .background(ColorManager.sysbackground)
         .navigationTitle("日记")
         .navigationBarBackButtonHidden(true)  // 隐藏系统默认的返回按钮
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("返回") {
+                Button(action: {
                     // 统一使用 removeLast() 返回
                     if !navigationPath.isEmpty {
                         navigationPath.removeLast()
                     }
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .medium))
                 }
             }
         }
@@ -75,55 +79,82 @@ struct ChatHistoryView: View {
     
     // 日记列表视图
     private var diaryListView: some View {
-        List {
-            ForEach(sortedRecords) { record in
-                JournalEntryCard(
-                    record: record,
-                    onTap: {
-                        // 确保使用最新的数据
-                        if let backendId = record.backendId {
-                            // 尝试从后端获取最新的日记详情
-                            Task {
-                                do {
-                                    let detailRecord = try await JournalDetailService.shared.fetchJournalDetail(journalId: backendId)
-                                    await MainActor.run {
-                                        // 直接调用回调，让 MainView 处理导航
-                                        navigationPath.append(AppRoute.journalDetail(id: backendId))
+        Group {
+            if isLoading {
+                // 加载状态
+                VStack {
+                    Spacer()
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                    Text("正在加载日记列表...")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .padding(.top)
+                    Spacer()
+                }
+            } else {
+                // 日记列表
+                List {
+                    ForEach(sortedRecords) { record in
+                        JournalEntryCard(
+                            record: record,
+                            onTap: {
+                                // 确保使用最新的数据
+                                if let backendId = record.backendId {
+                                    // 先检查缓存，如果缓存存在就直接使用
+                                    Task {
+                                        // 1. 首先尝试从缓存获取数据
+                                        if let cachedRecord = JournalDetailService.shared.getCachedJournalDetail(journalId: backendId) {
+                                            print("✅ 使用缓存的日记详情: journal_\(backendId)")
+                                            await MainActor.run {
+                                                navigationPath.append(AppRoute.journalDetail(id: backendId))
+                                            }
+                                            return
+                                        }
+                                        
+                                        // 2. 缓存不存在，从后端获取
+                                        print("🔍 缓存不存在，从后端获取日记详情: journal_\(backendId)")
+                                        do {
+                                            let detailRecord = try await JournalDetailService.shared.fetchAndCacheJournalDetail(journalId: backendId)
+                                            await MainActor.run {
+                                                navigationPath.append(AppRoute.journalDetail(id: backendId))
+                                            }
+                                        } catch {
+                                            print("❌ 获取日记详情失败: \(error)")
+                                            // 如果获取失败，使用本地数据
+                                            navigationPath.append(AppRoute.journalDetail(id: backendId))
+                                        }
                                     }
-                                } catch {
-                                    print("❌ 获取日记详情失败: \(error)")
-                                    // 如果获取失败，使用本地数据
+                                } else {
+                                    // 没有 backendId，无法导航
+                                    print("⚠️ 无法导航：缺少 backendId")
+                                }
+                            },
+                            onEdit: {
+                                // 编辑逻辑：调用 onJournalSelected 回调，让 MainView 处理导航
+                                if let backendId = record.backendId {
+                                    // 这里需要一个新的路由来处理编辑模式
+                                    // 暂时先导航到详情页面
                                     navigationPath.append(AppRoute.journalDetail(id: backendId))
                                 }
+                            },
+                            onDelete: {
+                                delete(record)
                             }
-                        } else {
-                            // 没有 backendId，无法导航
-                            print("⚠️ 无法导航：缺少 backendId")
-                        }
-                    },
-                    onEdit: {
-                        // 编辑逻辑：调用 onJournalSelected 回调，让 MainView 处理导航
-                        if let backendId = record.backendId {
-                            // 这里需要一个新的路由来处理编辑模式
-                            // 暂时先导航到详情页面
-                            navigationPath.append(AppRoute.journalDetail(id: backendId))
-                        }
-                    },
-                    onDelete: {
-                        delete(record)
+                        )
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
                     }
-                )
-                .listRowInsets(EdgeInsets())
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                }
+                .listStyle(PlainListStyle())
+                .background(ColorManager.sysbackground)
+                .refreshable {
+                    await refreshJournals()
+                }
             }
-        }
-        .listStyle(PlainListStyle())
-        .background(Color(.systemGray6))
-        .refreshable {
-            await refreshJournals()
         }
     }
     
@@ -139,7 +170,29 @@ struct ChatHistoryView: View {
     }
     
     private func loadRecords() {
-        records = RecordManager.loadAll().sorted { $0.date > $1.date }
+        // 异步加载数据，避免阻塞UI
+        Task {
+            await loadRecordsAsync()
+        }
+    }
+    
+    private func loadRecordsAsync() async {
+        // 设置加载状态
+        await MainActor.run {
+            isLoading = true
+        }
+        
+        // 在后台线程加载数据
+        let loadedRecords = await Task.detached {
+            RecordManager.loadAll().sorted { $0.date > $1.date }
+        }.value
+        
+        // 在主线程更新UI
+        await MainActor.run {
+            records = loadedRecords
+            isLoading = false
+            print("🔍 ChatHistoryView - 异步加载完成，records count: \(records.count)")
+        }
     }
     
     private func findRecordByJournalId(_ journalId: Int) -> ChatRecord? {
@@ -203,12 +256,34 @@ struct JournalEntryCard: View {
     
     @State private var showActionSheet = false
     
+    // 根据情绪获取对应的 primary 颜色
+    private var emotionPrimaryColor: Color {
+        guard let emotion = record.emotion else { 
+            return .gray 
+        }
+        
+        switch emotion {
+        case .happy:
+            return ColorManager.Happy.primary
+        case .sad:
+            return ColorManager.Sad.primary
+        case .angry:
+            return ColorManager.Angry.primary
+        case .peaceful:
+            return ColorManager.Peaceful.primary
+        case .happiness:
+            return ColorManager.Happiness.primary
+        case .unhappy:
+            return ColorManager.Unhappy.primary
+        }
+    }
+    
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 0) {
                 // 左侧彩色时间线
                 Rectangle()
-                    .fill(record.emotion?.color ?? .gray)
+                    .fill(emotionPrimaryColor)
                     .frame(width: 3)
                     .frame(maxHeight: .infinity)
                 
@@ -278,7 +353,7 @@ struct JournalEntryCard: View {
                         .padding(.bottom, 16)
                 }
             }
-            .background(Color(.systemBackground))
+            .background(ColorManager.cardbackground)
             .cornerRadius(12)
             .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
         }
