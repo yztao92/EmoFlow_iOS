@@ -1,11 +1,25 @@
 import SwiftUI
 
+// 弹窗管理器
+class ActionSheetManager: ObservableObject {
+    @Published var showActionSheet = false
+    var onEdit: (() -> Void)?
+    var onDelete: (() -> Void)?
+    
+    func show(onEdit: @escaping () -> Void, onDelete: @escaping () -> Void) {
+        self.onEdit = onEdit
+        self.onDelete = onDelete
+        self.showActionSheet = true
+    }
+}
+
 /// 聊天历史记录视图，展示心情日记列表
 struct ChatHistoryView: View {
     @State private var records: [ChatRecord] = []
     @State private var selectedTab: Int = 0 // 0: 列表, 1: 洞察
     @State private var isLoading = false // 添加加载状态
     @Binding var navigationPath: NavigationPath
+    @StateObject private var actionSheetManager = ActionSheetManager()
     
     // 按日期排序的记录
     private var sortedRecords: [ChatRecord] {
@@ -75,6 +89,19 @@ struct ChatHistoryView: View {
             loadRecords()
             print("   records count: \(records.count)")
         }
+        .confirmationDialog(
+            "选择操作",
+            isPresented: $actionSheetManager.showActionSheet,
+            titleVisibility: .visible
+        ) {
+            Button("编辑") {
+                actionSheetManager.onEdit?()
+            }
+            Button("删除", role: .destructive) {
+                actionSheetManager.onDelete?()
+            }
+            Button("取消", role: .cancel) { }
+        }
     }
     
     // 日记列表视图
@@ -93,63 +120,63 @@ struct ChatHistoryView: View {
                     Spacer()
                 }
             } else {
-                // 日记列表
-                List {
-                    ForEach(sortedRecords) { record in
-                        JournalEntryCard(
-                            record: record,
-                            onTap: {
-                                // 确保使用最新的数据
-                                if let backendId = record.backendId {
-                                    // 先检查缓存，如果缓存存在就直接使用
-                                    Task {
-                                        // 1. 首先尝试从缓存获取数据
-                                        if let cachedRecord = JournalDetailService.shared.getCachedJournalDetail(journalId: backendId) {
-                                            print("✅ 使用缓存的日记详情: journal_\(backendId)")
-                                            await MainActor.run {
+                // 日记列表 - 使用 ScrollView 替代 List
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        ForEach(sortedRecords) { record in
+                            JournalEntryCard(
+                                sheetManager: actionSheetManager,
+                                record: record,
+                                onTap: {
+                                    // 确保使用最新的数据
+                                    if let backendId = record.backendId {
+                                        // 先检查缓存，如果缓存存在就直接使用
+                                        Task {
+                                            // 1. 首先尝试从缓存获取数据
+                                            if let cachedRecord = JournalDetailService.shared.getCachedJournalDetail(journalId: backendId) {
+                                                print("✅ 使用缓存的日记详情: journal_\(backendId)")
+                                                await MainActor.run {
+                                                    navigationPath.append(AppRoute.journalDetail(id: backendId))
+                                                }
+                                                return
+                                            }
+                                            
+                                            // 2. 缓存不存在，从后端获取
+                                            print("🔍 缓存不存在，从后端获取日记详情: journal_\(backendId)")
+                                            do {
+                                                let detailRecord = try await JournalDetailService.shared.fetchAndCacheJournalDetail(journalId: backendId)
+                                                await MainActor.run {
+                                                    navigationPath.append(AppRoute.journalDetail(id: backendId))
+                                                }
+                                            } catch {
+                                                print("❌ 获取日记详情失败: \(error)")
+                                                // 如果获取失败，使用本地数据
                                                 navigationPath.append(AppRoute.journalDetail(id: backendId))
                                             }
-                                            return
                                         }
-                                        
-                                        // 2. 缓存不存在，从后端获取
-                                        print("🔍 缓存不存在，从后端获取日记详情: journal_\(backendId)")
-                                        do {
-                                            let detailRecord = try await JournalDetailService.shared.fetchAndCacheJournalDetail(journalId: backendId)
-                                            await MainActor.run {
-                                                navigationPath.append(AppRoute.journalDetail(id: backendId))
-                                            }
-                                        } catch {
-                                            print("❌ 获取日记详情失败: \(error)")
-                                            // 如果获取失败，使用本地数据
-                                            navigationPath.append(AppRoute.journalDetail(id: backendId))
-                                        }
+                                    } else {
+                                        // 没有 backendId，无法导航
+                                        print("⚠️ 无法导航：缺少 backendId")
                                     }
-                                } else {
-                                    // 没有 backendId，无法导航
-                                    print("⚠️ 无法导航：缺少 backendId")
+                                },
+                                onEdit: {
+                                    // 编辑逻辑：调用 onJournalSelected 回调，让 MainView 处理导航
+                                    if let backendId = record.backendId {
+                                        // 这里需要一个新的路由来处理编辑模式
+                                        // 暂时先导航到详情页面
+                                        navigationPath.append(AppRoute.journalDetail(id: backendId))
+                                    }
+                                },
+                                onDelete: {
+                                    delete(record)
                                 }
-                            },
-                            onEdit: {
-                                // 编辑逻辑：调用 onJournalSelected 回调，让 MainView 处理导航
-                                if let backendId = record.backendId {
-                                    // 这里需要一个新的路由来处理编辑模式
-                                    // 暂时先导航到详情页面
-                                    navigationPath.append(AppRoute.journalDetail(id: backendId))
-                                }
-                            },
-                            onDelete: {
-                                delete(record)
-                            }
-                        )
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                        }
                     }
+                    .padding(.vertical, 8)
                 }
-                .listStyle(PlainListStyle())
                 .background(ColorManager.sysbackground)
                 .refreshable {
                     await refreshJournals()
@@ -249,12 +276,11 @@ struct ChatHistoryView: View {
 
 // 日记卡片组件
 struct JournalEntryCard: View {
+    @ObservedObject var sheetManager: ActionSheetManager
     let record: ChatRecord
     let onTap: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
-    
-    @State private var showActionSheet = false
     
     // 根据情绪获取对应的 primary 颜色
     private var emotionPrimaryColor: Color {
@@ -279,95 +305,87 @@ struct JournalEntryCard: View {
     }
     
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 0) {
-                // 左侧彩色时间线
-                Rectangle()
-                    .fill(emotionPrimaryColor)
-                    .frame(width: 3)
-                    .frame(maxHeight: .infinity)
-                
-                // 主要内容区域
-                VStack(alignment: .leading, spacing: 0) {
-                    // 1. 情绪icon + 日期 + more按钮
-                    HStack(spacing: 12) {
-                        // 情绪图标
-                        Image(record.emotion?.iconName ?? "Happy")
-                            .resizable()
-                            .frame(width: 48, height: 48)
-                        
-                        // 日期
-                        Text(formatDate(record.date))
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.primary)
-                        
-                        Spacer()
-                        
-                        // More按钮
-                        Button(action: {
-                            showActionSheet = true
-                        }) {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.secondary)
-                                .frame(width: 44, height: 44)
-                                .rotationEffect(.degrees(90))
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
+        HStack(spacing: 0) {
+            // 左侧彩色时间线
+            Rectangle()
+                .fill(emotionPrimaryColor)
+                .frame(width: 3)
+                .frame(maxHeight: .infinity)
+            
+            // 主要内容区域
+            VStack(alignment: .leading, spacing: 0) {
+                // 1. 情绪icon + 日期
+                HStack(spacing: 12) {
+                    // 情绪图标
+                    Image(record.emotion?.iconName ?? "Happy")
+                        .resizable()
+                        .frame(width: 48, height: 48)
                     
-                    // 间隔 8px
-                    Spacer().frame(height: 8)
-                    
-                    // 2. 时间
-                    HStack {
-                        Text(formatTime(record.date))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-                        
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                    
-                    // 间隔 8px
-                    Spacer().frame(height: 8)
-                    
-                    // 3. 日记标题
-                    Text(record.title ?? "无标题")
-                        .font(.system(size: 20, weight: .bold))
+                    // 日期
+                    Text(formatDate(record.date))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.primary)
-                        .padding(.horizontal, 16)
                     
-                    // 间隔 20px
-                    Spacer().frame(height: 20)
+                    Spacer()
                     
-                    // 4. 日记正文
-                    Text(record.plainTextContent)
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundColor(.secondary)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 16)
+                    // More按钮 - 移到右上角
+                    Button(action: { 
+                        print("🔘 More按钮被点击")
+                        sheetManager.show(onEdit: onEdit, onDelete: onDelete)
+                    }) {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 60, height: 60) // 增大到 60x60
+                            .rotationEffect(.degrees(90))
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                
+                // 间隔 8px
+                Spacer().frame(height: 8)
+                
+                // 2. 时间
+                HStack {
+                    Text(formatTime(record.date))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                
+                // 间隔 8px
+                Spacer().frame(height: 8)
+                
+                // 3. 日记标题
+                Text(record.title ?? "无标题")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 16)
+                
+                // 间隔 20px
+                Spacer().frame(height: 20)
+                
+                // 4. 日记正文
+                Text(record.plainTextContent)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
             }
-            .background(ColorManager.cardbackground)
-            .cornerRadius(12)
-            .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
         }
-        .buttonStyle(PlainButtonStyle())
-        .confirmationDialog("选择操作", isPresented: $showActionSheet, titleVisibility: .hidden) {
-            Button("编辑") {
-                onEdit()
-            }
-            
-            Button("删除", role: .destructive) {
-                onDelete()
-            }
-            
-            Button("取消", role: .cancel) { }
+        .background(ColorManager.cardbackground)
+        .cornerRadius(12)
+        .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            print("🔘 卡片被点击")
+            onTap()
         }
     }
     

@@ -73,10 +73,19 @@ struct JournalDetailContainerView: View {
                         navigationPath.removeLast()
                     }
                 }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(getEmotionSecondaryColor())
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(getEmotionSecondaryColor())
+                        
+                        if let record = record {
+                            Text(formatFullDateTime(record.date))
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(getEmotionSecondaryColor())
+                        }
+                    }
                 }
+                .buttonStyle(PlainButtonStyle())
             }
         }
         .onAppear {
@@ -116,6 +125,13 @@ struct JournalDetailContainerView: View {
         case .unhappy:
             return ColorManager.Unhappy.secondary
         }
+    }
+    
+    // 格式化日期显示为完整的日期和时间
+    private func formatFullDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M月d日 HH:mm"
+        return formatter.string(from: date)
     }
     
     private func loadJournalDetail(forceRefresh: Bool = false) {

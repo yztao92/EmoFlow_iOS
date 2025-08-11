@@ -62,15 +62,6 @@ struct JournalContentView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                 }
-                
-                // 日期显示在右下角
-                HStack {
-                    Spacer()
-                    Text(formatDisplayTime())
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .padding(.trailing, 20)
-                }
             }
         }
         .padding(.horizontal, 16)

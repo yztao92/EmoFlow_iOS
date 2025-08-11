@@ -12,7 +12,7 @@ struct SimpleRichTextEditor: UIViewRepresentable {
     
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
-        textView.font = .systemFont(ofSize: 14, weight: .light) // 设置为Light样式
+        textView.font = .systemFont(ofSize: 16, weight: .light) // 设置为16px，Light样式
         textView.backgroundColor = UIColor.clear
         textView.textColor = UIColor.label // 使用系统标签颜色，自动适应深色/浅色模式
         textView.delegate = context.coordinator
@@ -24,7 +24,7 @@ struct SimpleRichTextEditor: UIViewRepresentable {
         textView.isSelectable = true
         
         // 设置字体渲染模式，确保支持 emoji
-        textView.font = .systemFont(ofSize: 14, weight: .light)
+        textView.font = .systemFont(ofSize: 16, weight: .light)
         textView.textColor = UIColor.label
         
         // 确保支持 emoji 输入
@@ -33,11 +33,11 @@ struct SimpleRichTextEditor: UIViewRepresentable {
         textView.autocapitalizationType = .sentences
         
         // 设置默认的输入属性，确保新输入的文本使用默认字体
-        let defaultFont = UIFont.systemFont(ofSize: 14, weight: .light)
+        let defaultFont = UIFont.systemFont(ofSize: 16, weight: .light)
         let defaultColor = UIColor.label
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .center // 默认居中对齐
-        paragraphStyle.lineSpacing = 12 // 设置行间距，让文本更易读
+        paragraphStyle.lineSpacing = 16 // 设置行间距，让文本更易读
         
         textView.typingAttributes = [
             .font: defaultFont,
@@ -127,7 +127,7 @@ struct SimpleRichTextEditor: UIViewRepresentable {
             }
             
             // 确保新输入的文本使用默认字体属性
-            let defaultFont = UIFont.systemFont(ofSize: 20, weight: .light)
+            let defaultFont = UIFont.systemFont(ofSize: 16, weight: .light)
             let defaultColor = UIColor.label
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.alignment = .center // 默认居中对齐
@@ -150,11 +150,11 @@ struct SimpleRichTextEditor: UIViewRepresentable {
             }
             
             // 确保新输入的文本使用默认字体属性
-            let defaultFont = UIFont.systemFont(ofSize: 20, weight: .light)
+            let defaultFont = UIFont.systemFont(ofSize: 16, weight: .light)
             let defaultColor = UIColor.label
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.alignment = .center // 默认居中对齐
-            paragraphStyle.lineSpacing = 8 // 设置行间距，与HTML的line-height: 1.4对应
+            paragraphStyle.lineSpacing = 16 // 设置行间距，让文本更易读
             
             textView.typingAttributes = [
                 .font: defaultFont,
@@ -207,7 +207,7 @@ struct RichTextToolbar: View {
             // 对齐方式按钮
             Button(action: onAlignment) {
                 Image(systemName: getAlignmentIcon(currentAlignment))
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundColor(.primary)
                     .frame(width: 32, height: 32)
                     .background(Color(.systemGray5))
@@ -217,7 +217,7 @@ struct RichTextToolbar: View {
             // 粗体按钮
             Button(action: onBold) {
                 Image(systemName: "bold")
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundColor(.primary)
                     .frame(width: 32, height: 32)
                     .background(Color(.systemGray5))
@@ -296,7 +296,7 @@ class RichTextHelper {
             if allBold {
                 // 如果全部都是粗体，则移除粗体
                 for i in range.location..<(range.location + range.length) {
-                    let normalFont = UIFont.systemFont(ofSize: 20) // 改为20pt
+                    let normalFont = UIFont.systemFont(ofSize: 16) // 改为16pt
                     attributedString.addAttribute(.font, value: normalFont, range: NSRange(location: i, length: 1))
                     
                     // 保持行间距
@@ -310,7 +310,7 @@ class RichTextHelper {
             } else {
                 // 如果不是全部粗体，则全部设为粗体
                 for i in range.location..<(range.location + range.length) {
-                    let boldFont = UIFont.boldSystemFont(ofSize: 20) // 改为20pt
+                    let boldFont = UIFont.boldSystemFont(ofSize: 16) // 改为16pt
                     attributedString.addAttribute(.font, value: boldFont, range: NSRange(location: i, length: 1))
                     
                     // 保持行间距

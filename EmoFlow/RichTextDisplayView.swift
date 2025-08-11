@@ -49,7 +49,7 @@ struct RichTextDisplayView: UIViewRepresentable {
         for i in 0..<mutableAttributedString.length {
             if mutableAttributedString.attribute(.font, at: i, effectiveRange: nil) == nil {
                 // 只为没有字体属性的字符设置默认字体
-                mutableAttributedString.addAttribute(.font, value: UIFont.systemFont(ofSize: 20), range: NSRange(location: i, length: 1))
+                mutableAttributedString.addAttribute(.font, value: UIFont.systemFont(ofSize: 16), range: NSRange(location: i, length: 1))
             }
             // 强制设置文字颜色，覆盖HTML中的颜色设置
             mutableAttributedString.addAttribute(.foregroundColor, value: textColor, range: NSRange(location: i, length: 1))
@@ -62,7 +62,7 @@ struct RichTextDisplayView: UIViewRepresentable {
                 // 如果已有段落样式，保留对齐方式，只修改行间距
                 let newParagraphStyle = NSMutableParagraphStyle()
                 newParagraphStyle.alignment = existingParagraphStyle.alignment
-                newParagraphStyle.lineSpacing = 16 // 设置行间距，让文本更易读
+                newParagraphStyle.lineSpacing = 20 // 设置行间距，让文本更易读
                 
                 // 获取当前字符的有效范围
                 var effectiveRange = NSRange()
@@ -77,7 +77,7 @@ struct RichTextDisplayView: UIViewRepresentable {
                 // 如果没有段落样式，创建一个居中对齐的段落样式
                 let newParagraphStyle = NSMutableParagraphStyle()
                 newParagraphStyle.alignment = .center // 默认居中对齐
-                newParagraphStyle.lineSpacing = 16 // 设置行间距，让文本更易读
+                newParagraphStyle.lineSpacing = 20 // 设置行间距，让文本更易读
                 
                 mutableAttributedString.addAttribute(.paragraphStyle, value: newParagraphStyle, range: NSRange(location: i, length: 1))
                 i += 1
