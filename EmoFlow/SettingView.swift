@@ -9,6 +9,7 @@ import SwiftUI
 struct SettingsView: View {
     @State private var username: String = UserDefaults.standard.string(forKey: "userName") ?? ""
     @State private var userEmail: String = UserDefaults.standard.string(forKey: "userEmail") ?? ""
+    @State private var heartCount: Int = UserDefaults.standard.integer(forKey: "heartCount")
     @State private var showLogoutAlert = false
     @State private var showUsernameEditAlert = false
     @State private var tempUsername: String = ""
@@ -20,8 +21,9 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        Form {
-            Section(header: Text("账户信息")) {
+        VStack(spacing: 16) {
+            // 账户信息卡片
+            VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     Text("用户名")
                     Spacer()
@@ -38,31 +40,50 @@ struct SettingsView: View {
                         }
                     }
                 }
-                .listRowBackground(ColorManager.cardbackground)
+                .padding()
                 
                 if !userEmail.isEmpty {
+                    Divider()
                     HStack {
                         Text("邮箱")
                         Spacer()
                         Text(userEmail)
                             .foregroundColor(.secondary)
                     }
-                    .listRowBackground(ColorManager.cardbackground)
+                    .padding()
                 }
             }
-
-            Section {
-                Button(role: .destructive) {
-                    showLogoutAlert = true
-                } label: {
-                    HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                        Text("退出登录")
-                    }
+            .background(ColorManager.cardbackground)
+            .cornerRadius(12)
+            
+                            // 心心卡片
+                HStack {
+                    Text("心心")
+                    Spacer()
+                    Text("\(heartCount)")
+                        .foregroundColor(.secondary)
                 }
-                .listRowBackground(ColorManager.cardbackground)
+                .padding()
+                .background(ColorManager.cardbackground)
+                .cornerRadius(12)
+            
+            // 退出登录卡片
+            Button(role: .destructive) {
+                showLogoutAlert = true
+            } label: {
+                HStack {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                    Text("退出登录")
+                }
             }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(ColorManager.cardbackground)
+            .cornerRadius(12)
+            
+            Spacer()
         }
+        .padding()
         .scrollContentBackground(.hidden)
         .background(ColorManager.sysbackground)
         .navigationTitle("设置")
@@ -103,8 +124,31 @@ struct SettingsView: View {
             // 更新用户信息显示
             username = UserDefaults.standard.string(forKey: "userName") ?? ""
             userEmail = UserDefaults.standard.string(forKey: "userEmail") ?? ""
+            
+            // 初始化心心数值，如果UserDefaults中没有值则设置为20
+            if UserDefaults.standard.object(forKey: "heartCount") == nil {
+                UserDefaults.standard.set(20, forKey: "heartCount")
+                heartCount = 20
+            } else {
+                heartCount = UserDefaults.standard.integer(forKey: "heartCount")
+            }
+            
+            // 每次进入设置页面时获取最新的心心数量
+            Task {
+                do {
+                    let newHeartCount = try await UserHeartService.shared.fetchUserHeart()
+                    await MainActor.run {
+                        heartCount = newHeartCount
+                    }
+                    print("🔍 设置页面进入时获取心心数量: \(newHeartCount)")
+                } catch {
+                    print("⚠️ 设置页面进入时获取心心数量失败: \(error)")
+                }
+            }
         }
     }
+    
+
     
     private func logout() {
         // 清除用户数据

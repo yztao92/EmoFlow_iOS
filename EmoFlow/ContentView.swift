@@ -154,6 +154,7 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
 
     @State private var currentEmotionIndex: Int = 3 // 默认显示平和
+    @State private var showHeartInsufficientToast: Bool = false // 心心数量不足的toast状态
     
     private var currentEmotion: EmotionData {
         EmotionData.emotions[currentEmotionIndex]
@@ -208,6 +209,19 @@ struct ContentView: View {
                     
                     // 和我聊聊按钮（filled样式）
                     Button(action: {
+                        // 在跳转前先检查心心数量
+                        let currentHeartCount = UserDefaults.standard.integer(forKey: "heartCount")
+                        guard currentHeartCount >= 2 else {
+                            // 心心数量不足，显示toast并拦截
+                            showHeartInsufficientToast = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                showHeartInsufficientToast = false
+                            }
+                            print("[LOG] 和我聊聊按钮点击被拦截: 心心数量不足，当前: \(currentHeartCount)，需要: 2")
+                            return
+                        }
+                        
+                        // 心心数量足够，正常跳转
                         let emotionType = convertEmotionDataToEmotionType(currentEmotion)
                         let chatMessage = getEmotionChatMessage(emotionType)
                         navigationPath.append(AppRoute.chat(emotion: emotionType, initialMessage: chatMessage))
@@ -275,6 +289,26 @@ struct ContentView: View {
                         }
                     }
             )
+            
+            // 心心数量不足的toast
+            if showHeartInsufficientToast {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text("心心数量不足，聊天需要至少2个心心")
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(Color.black.opacity(0.85))
+                            .cornerRadius(18)
+                        Spacer()
+                    }
+                    .padding(.bottom, 120) // 距离底部按钮区域有一定距离
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut, value: showHeartInsufficientToast)
+            }
 
         }
     }

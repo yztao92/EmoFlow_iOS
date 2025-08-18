@@ -82,7 +82,7 @@ struct JournalEditView: View {
             if mutableAttributedString.length > 0 {
                 let paragraphStyle = NSMutableParagraphStyle()
                 paragraphStyle.alignment = originalAlignment // 保持原有的对齐方式
-                paragraphStyle.lineSpacing = 16 // 设置行间距，让文本更易读
+                paragraphStyle.lineSpacing = 10 // 设置行间距，让文本更易读
                 mutableAttributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
             }
             
@@ -140,7 +140,7 @@ struct JournalEditView: View {
                         
                         // 标题输入
                         TextField("给这段心情起个标题...", text: $title)
-                            .font(.system(size: 24, weight: .semibold))
+                            .font(.system(size: 28, weight: .semibold))
                             .foregroundColor(.primary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 16)

@@ -33,6 +33,16 @@ struct EmoFlowApp: App {
                 // 如果本地存储中有 userToken，则认为用户已登录
                 if let _ = UserDefaults.standard.string(forKey: "userToken") {
                     isLoggedIn = true
+                    
+                    // APP启动时获取最新的心心数量
+                    Task {
+                        do {
+                            let heartCount = try await UserHeartService.shared.fetchUserHeart()
+                            print("🔍 APP启动时获取心心数量: \(heartCount)")
+                        } catch {
+                            print("⚠️ APP启动时获取心心数量失败: \(error)")
+                        }
+                    }
                 }
             }
         }

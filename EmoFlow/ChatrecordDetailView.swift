@@ -82,7 +82,7 @@ struct ChatrecordDetailView: View {
                 // 根据是否有聊天记录决定显示内容
                 if record.messages.isEmpty {
                     // 没有聊天记录时，显示笔记内容（使用共享组件）
-                    ScrollView {
+                    ScrollView(.vertical, showsIndicators: true) { // 明确指定垂直滚动并显示滚动指示器
                         JournalContentView(
                             emotion: record.emotion,
                             title: record.title,
@@ -90,12 +90,13 @@ struct ChatrecordDetailView: View {
                             date: record.date,
                             originalTimeString: record.originalTimeString
                         )
+                        .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height - 200) // 确保有足够的最小高度
                     }
                 } else {
                     // 有聊天记录时，显示TabView
                     TabView(selection: $selectedPage) {
-                                                // 笔记内容页（使用共享组件）
-                        ScrollView {
+                        // 笔记内容页（使用共享组件）
+                        ScrollView(.vertical, showsIndicators: true) { // 明确指定垂直滚动并显示滚动指示器
                             JournalContentView(
                                 emotion: record.emotion,
                                 title: record.title,
@@ -103,6 +104,7 @@ struct ChatrecordDetailView: View {
                                 date: record.date,
                                 originalTimeString: record.originalTimeString
                             )
+                            .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height - 200) // 确保有足够的最小高度
                         }
                         .tag(0)
 

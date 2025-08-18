@@ -5,6 +5,7 @@ import Foundation
 struct ChatRequestPayload: Codable {
     let session_id: String
     let messages: [ChatMessageDTO]
+    let emotion: String?  // 添加 emotion 字段
 }
 
 // MARK: - 消息结构
@@ -21,6 +22,7 @@ struct ChatResponseWrapper: Codable {
 struct ChatAnswer: Codable {
     let answer: String
     let references: [String]
+    let user_heart: Int?
 }
 
 // MARK: - 自定义错误
@@ -29,6 +31,7 @@ enum ChatServiceError: Error, LocalizedError, Equatable {
     case invalidResponse
     case timeout
     case unauthorized
+    case insufficientHeart
 
     var errorDescription: String? {
         switch self {
@@ -40,6 +43,8 @@ enum ChatServiceError: Error, LocalizedError, Equatable {
             return "请求超时，请检查网络连接"
         case .unauthorized:
             return "用户未授权，请重新登录"
+        case .insufficientHeart:
+            return "心心数量不足，聊天需要至少2个心心"
         }
     }
 }
@@ -58,9 +63,21 @@ class ChatService {
         emotions: [EmotionType],
         messages: [ChatMessageDTO]
     ) async throws -> (String, [String]) {
-        let maxRetries = 3
-        var lastError: Error?
+        // 首先检查token是否存在
+        guard let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty else {
+            print("❌ 聊天接口 - 未找到用户token，拒绝发送请求")
+            throw ChatServiceError.unauthorized
+        }
         
+        // 检查心心数量是否足够（聊天需要至少2个心心）
+        let currentHeartCount = UserDefaults.standard.integer(forKey: "heartCount")
+        guard currentHeartCount >= 2 else {
+            print("❌ 聊天接口 - 心心数量不足，当前: \(currentHeartCount)，需要: 2")
+            throw ChatServiceError.insufficientHeart
+        }
+        
+        let maxRetries = 3
+        var lastError: Error?        
         for attempt in 1...maxRetries {
             do {
                 return try await performSendMessage(sessionID: sessionID, emotions: emotions, messages: messages)
@@ -103,18 +120,20 @@ class ChatService {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeoutInterval
         
-        // 添加认证token
-        if let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty {
-            request.addValue(token, forHTTPHeaderField: "token")
-            print("🔍 聊天接口 - 添加认证token: \(token.prefix(10))...")
-        } else {
-            print("⚠️ 聊天接口 - 未找到用户token")
+        // 添加认证token - 强制要求token验证
+        guard let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty else {
+            print("❌ 聊天接口 - 未找到用户token，拒绝发送请求")
+            throw ChatServiceError.unauthorized
         }
+        
+        request.addValue(token, forHTTPHeaderField: "token")
+        print("🔍 聊天接口 - 添加认证token: \(token.prefix(10))...")
 
         // 2. 构造请求体
         let payload = ChatRequestPayload(
             session_id: sessionID,
-            messages: messages
+            messages: messages,
+            emotion: emotions.first?.rawValue // 将 EmotionType 转换为 String
         )
         
         // 调试：打印发送给后端的数据
@@ -131,7 +150,8 @@ class ChatService {
             "messages": messages.map { [
                 "role": $0.role,
                 "content": $0.content
-            ] }
+            ] },
+            "emotion": emotions.first?.rawValue // 将 EmotionType 转换为 String
         ]
         print("   JSON Payload: \(payloadDict)")
         
@@ -140,6 +160,11 @@ class ChatService {
         // 3. 发起网络请求
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
+
+            // 👇 打印后端原始返回内容
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("【后端原始返回】\(jsonString)")
+            }
 
             // 4. 检查 HTTP 状态码
             guard let httpResponse = response as? HTTPURLResponse else {
@@ -166,6 +191,13 @@ class ChatService {
 
             // 5. 解码并返回结果
             let wrapper = try JSONDecoder().decode(ChatResponseWrapper.self, from: data)
+            
+            // 更新用户的心心值
+            if let userHeart = wrapper.response.user_heart {
+                UserDefaults.standard.set(userHeart, forKey: "heartCount")
+                print("🔍 聊天接口 - 更新用户心心值: \(userHeart)")
+            }
+            
             return (wrapper.response.answer, wrapper.response.references)
 
         } catch let error as ChatServiceError {

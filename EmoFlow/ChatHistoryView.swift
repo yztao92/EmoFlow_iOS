@@ -172,7 +172,7 @@ struct ChatHistoryView: View {
                                 }
                             )
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 0)
                         }
                     }
                     .padding(.vertical, 8)
@@ -309,7 +309,7 @@ struct JournalEntryCard: View {
             // 左侧彩色时间线
             Rectangle()
                 .fill(emotionPrimaryColor)
-                .frame(width: 3)
+                .frame(width: 4)
                 .frame(maxHeight: .infinity)
             
             // 主要内容区域
@@ -344,14 +344,14 @@ struct JournalEntryCard: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 
-                // 间隔 8px
-                Spacer().frame(height: 8)
+                // 间隔 4px
+                Spacer().frame(height: 4)
                 
                 // 2. 时间
                 HStack {
                     Text(formatTime(record.date))
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(.secondary)
                     
                     Spacer()
                 }
@@ -366,8 +366,8 @@ struct JournalEntryCard: View {
                     .foregroundColor(.primary)
                     .padding(.horizontal, 16)
                 
-                // 间隔 20px
-                Spacer().frame(height: 20)
+                // 间隔 16px
+                Spacer().frame(height: 16)
                 
                 // 4. 日记正文
                 Text(record.plainTextContent)

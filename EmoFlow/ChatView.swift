@@ -287,7 +287,7 @@ struct ChatView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        Text("生成日记失败，请重试")
+                        Text(toastMessage.isEmpty ? "操作失败，请重试" : toastMessage)
                             .foregroundColor(.white)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 12)
@@ -323,12 +323,27 @@ struct ChatView: View {
             print("[LOG] send() aborted: 前缀user:/assistant:")
             return
         }
+        
+        // 在发送消息前先检查心心数量
+        let currentHeartCount = UserDefaults.standard.integer(forKey: "heartCount")
+        guard currentHeartCount >= 2 else {
+            // 心心数量不足，直接显示toast并拦截
+            toastMessage = "心心数量不足，聊天需要至少2个心心"
+            showToast = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                showToast = false
+            }
+            print("[LOG] send() aborted: 心心数量不足，当前: \(currentHeartCount)，需要: 2")
+            return
+        }
+        
+        // 心心数量足够，继续发送消息
         // 只在非initialMessage时append user消息
         let isInitial = (message != nil)
         if !isInitial {
-        let userMessage = ChatMessage(role: .user, content: trimmed)
-        messages.append(userMessage)
-        inputText = ""
+            let userMessage = ChatMessage(role: .user, content: trimmed)
+            messages.append(userMessage)
+            inputText = ""
         }
         isLoading = true
         print("[LOG] send() 发送给LLM, messages.count=\(messages.count), last=\(trimmed)")
@@ -362,6 +377,8 @@ struct ChatView: View {
                 messages.append(.init(role: .assistant, content: answer, references: references))
             } catch {
                 print("[LOG] ChatService.shared.sendMessage 失败, error=\(error)")
+                
+                // 其他错误，显示通用错误消息
                 messages.append(.init(role: .assistant, content: "出错了，请重试"))
             }
             isLoading = false
@@ -371,6 +388,20 @@ struct ChatView: View {
 
     private func saveCurrentChat() {
         guard !messages.isEmpty else { return }
+        
+        // 在生成日记前先检查心心数量
+        let currentHeartCount = UserDefaults.standard.integer(forKey: "heartCount")
+        guard currentHeartCount >= 4 else {
+            // 心心数量不足，直接显示toast并拦截
+            toastMessage = "心心数量不足，生成日记需要至少4个心心"
+            showToast = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                showToast = false
+            }
+            print("[LOG] saveCurrentChat() aborted: 心心数量不足，当前: \(currentHeartCount)，需要: 4")
+            return
+        }
+        
         let emotion = emotions.first ?? .happy
         DispatchQueue.main.async { self.isSaving = true; self.didTimeout = false }
         // 启动超时定时器
@@ -379,6 +410,7 @@ struct ChatView: View {
                 self.didTimeout = true
                 DispatchQueue.main.async {
                     self.isSaving = false
+                    self.toastMessage = "生成日记超时，请重试"
                     self.showToast = true
                 }
                 // toast自动消失
@@ -466,12 +498,15 @@ struct ChatView: View {
             } catch {
                 if didTimeout { return }
                 print("❌ 生成心情日记失败: \(error)")
+                
+                // 其他错误，创建本地记录并显示通用错误
                 let fallbackSummary = messages.first?.content ?? "新会话"
                 let now = Date()
                 let fallbackRecord = ChatRecord(id: UUID(), date: now, messages: messages, summary: fallbackSummary, emotion: emotion, title: "今日心情")
                 chatRecords.append(fallbackRecord)
                 RecordManager.saveAll(chatRecords)
                 DispatchQueue.main.async {
+                    toastMessage = "生成日记失败，请重试"
                     showToast = true
                     isSaving = false
                 }

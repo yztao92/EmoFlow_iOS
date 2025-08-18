@@ -276,6 +276,16 @@ struct AppLoginView: View {
                         Task {
                             await JournalListService.shared.syncJournals()
                         }
+                        
+                        // 获取最新的心心数量
+                        Task {
+                            do {
+                                let heartCount = try await UserHeartService.shared.fetchUserHeart()
+                                print("🔍 登录成功后获取心心数量: \(heartCount)")
+                            } catch {
+                                print("⚠️ 登录成功后获取心心数量失败: \(error)")
+                            }
+                        }
                     } else {
                         // 后端验证失败
                         self.errorMessage = "登录验证失败"

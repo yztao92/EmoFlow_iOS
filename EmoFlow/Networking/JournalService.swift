@@ -21,14 +21,16 @@ struct JournalResponse: Codable {
     let title: String
     let status: String
     let journal_id: Int? // 新增：日记ID
+    let user_heart: Int?
 }
 
 // MARK: - 自定义错误
-enum JournalServiceError: Error, LocalizedError {
+enum JournalServiceError: Error, LocalizedError, Equatable {
     case networkError(String)
     case invalidResponse
     case timeout
     case unauthorized
+    case insufficientHeart
     
     var errorDescription: String? {
         switch self {
@@ -40,6 +42,8 @@ enum JournalServiceError: Error, LocalizedError {
             return "请求超时，请检查网络连接"
         case .unauthorized:
             return "用户未授权，请重新登录"
+        case .insufficientHeart:
+            return "心心数量不足，生成日记需要至少4个心心"
         }
     }
 }
@@ -56,19 +60,27 @@ class JournalService {
         emotions: [EmotionType],
         messages: [ChatMessageDTO]
     ) async throws -> (String, String, Int?) {  // 返回 (journal, title, journal_id)
+        // 检查心心数量是否足够（生成日记需要至少4个心心）
+        let currentHeartCount = UserDefaults.standard.integer(forKey: "heartCount")
+        guard currentHeartCount >= 4 else {
+            print("❌ 日记接口 - 心心数量不足，当前: \(currentHeartCount)，需要: 4")
+            throw JournalServiceError.insufficientHeart
+        }
+        
         // 1. 构造 URLRequest
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeoutInterval
         
-        // 添加认证token
-        if let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty {
-            request.addValue(token, forHTTPHeaderField: "token")
-            print("🔍 日记接口 - 添加认证token: \(token.prefix(10))...")
-        } else {
-            print("⚠️ 日记接口 - 未找到用户token")
+        // 添加认证token - 强制要求token验证
+        guard let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty else {
+            print("❌ 日记接口 - 未找到用户token，拒绝发送请求")
+            throw JournalServiceError.unauthorized
         }
+        
+        request.addValue(token, forHTTPHeaderField: "token")
+        print("🔍 日记接口 - 添加认证token: \(token.prefix(10))...")
 
         // 2. 准备 session_id（identifierForVendor 是 @MainActor 隔离的，需要 await）
         let vendor = await UIDevice.current.identifierForVendor
@@ -151,6 +163,7 @@ class JournalService {
             print("   Parsed Title: \(wrapper.title)")
             print("   Parsed Status: \(wrapper.status)")
             print("   Parsed Journal ID: \(wrapper.journal_id ?? -1)")
+            print("   Parsed User Heart: \(wrapper.user_heart)")
             
             // 检查状态
             guard wrapper.status == "success" else {
@@ -162,6 +175,12 @@ class JournalService {
             if wrapper.journal.isEmpty || wrapper.journal == "生成失败" {
                 print("❌ 日记接口 - 内容生成失败")
                 throw JournalServiceError.networkError("日记内容生成失败")
+            }
+            
+            // 更新用户的心心值
+            if let userHeart = wrapper.user_heart {
+                UserDefaults.standard.set(userHeart, forKey: "heartCount")
+                print("🔍 日记接口 - 更新用户心心值: \(userHeart)")
             }
             
             print("✅ 日记接口 - 成功生成日记")

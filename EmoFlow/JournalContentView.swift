@@ -30,7 +30,7 @@ struct JournalContentView: View {
             // 标题显示 - 居中
             if let title = title, !title.isEmpty {
                 Text(title)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundColor(.primary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 16)
@@ -46,19 +46,20 @@ struct JournalContentView: View {
                         attributedString: attributedString,
                         textColor: .primary
                     )
-                    .frame(maxWidth: .infinity, minHeight: 200)
+                    .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity) // 允许内容扩展到最大高度
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .onAppear {
                         print("📝 JournalContentView - 显示内容，长度: \(content.count)")
+                        print("📝 JournalContentView - 内容预览: \(String(content.prefix(100)))...")
                     }
                 } else {
                     // 如果HTML转换失败，显示纯文本
                     Text(content)
-                        .font(.system(size: 20))
+                        .font(.system(size: 20, weight: .light))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, minHeight: 200)
+                        .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity) // 允许内容扩展到最大高度
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                 }
