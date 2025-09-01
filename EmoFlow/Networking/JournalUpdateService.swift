@@ -1,5 +1,26 @@
 import Foundation
 
+// MARK: - 日记更新错误枚举
+enum JournalUpdateServiceError: Error, LocalizedError {
+    case unauthorized
+    case networkError(String)
+    case invalidResponse
+    case decodingError
+    
+    var errorDescription: String? {
+        switch self {
+        case .unauthorized:
+            return "用户未授权，请重新登录"
+        case .networkError(let message):
+            return "网络错误: \(message)"
+        case .invalidResponse:
+            return "服务器响应无效"
+        case .decodingError:
+            return "响应解析失败"
+        }
+    }
+}
+
 // MARK: - 日记更新请求模型
 struct JournalUpdateRequest: Codable {
     let title: String?
@@ -70,13 +91,16 @@ class JournalUpdateService {
                 UserDefaults.standard.removeObject(forKey: "userToken")
                 UserDefaults.standard.removeObject(forKey: "userName")
                 UserDefaults.standard.removeObject(forKey: "userEmail")
+                UserDefaults.standard.removeObject(forKey: "heartCount")
+                UserDefaults.standard.removeObject(forKey: "userBirthday")
+                UserDefaults.standard.removeObject(forKey: "isMember")
                 
                 // 发送登出通知
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(name: .logout, object: nil)
                 }
                 
-                throw NetworkError.unauthorized
+                throw JournalUpdateServiceError.unauthorized
             } else {
                 throw NetworkError.httpError(httpResponse.statusCode, errorMessage)
             }

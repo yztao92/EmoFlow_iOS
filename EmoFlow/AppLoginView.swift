@@ -277,13 +277,13 @@ struct AppLoginView: View {
                             await JournalListService.shared.syncJournals()
                         }
                         
-                        // 获取最新的心心数量
+                        // 获取最新的用户信息（包含心心数量）
                         Task {
                             do {
-                                let heartCount = try await UserHeartService.shared.fetchUserHeart()
-                                print("🔍 登录成功后获取心心数量: \(heartCount)")
+                                let userInfo = try await UserProfileService.shared.fetchUserProfile()
+                                print("🔍 登录成功后获取用户信息: \(userInfo.name), 心心数量: \(userInfo.heart)")
                             } catch {
-                                print("⚠️ 登录成功后获取心心数量失败: \(error)")
+                                print("⚠️ 登录成功后获取用户信息失败: \(error)")
                             }
                         }
                     } else {

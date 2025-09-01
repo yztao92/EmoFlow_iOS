@@ -177,6 +177,9 @@ class ChatService {
                     UserDefaults.standard.removeObject(forKey: "userToken")
                     UserDefaults.standard.removeObject(forKey: "userName")
                     UserDefaults.standard.removeObject(forKey: "userEmail")
+                    UserDefaults.standard.removeObject(forKey: "heartCount")
+                    UserDefaults.standard.removeObject(forKey: "userBirthday")
+                    UserDefaults.standard.removeObject(forKey: "isMember")
                     
                     // 发送登出通知
                     DispatchQueue.main.async {

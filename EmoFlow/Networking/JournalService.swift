@@ -17,11 +17,15 @@ struct JournalRequestPayload: Codable {
 
 // MARK: - 响应结构
 struct JournalResponse: Codable {
-    let journal: String
+    let journal_id: Int?
     let title: String
+    let content: String
+    let content_html: String
+    let content_plain: String
+    let content_format: String
+    let is_safe: Bool
+    let emotion: String
     let status: String
-    let journal_id: Int? // 新增：日记ID
-    let user_heart: Int?
 }
 
 // MARK: - 自定义错误
@@ -140,6 +144,9 @@ class JournalService {
                     UserDefaults.standard.removeObject(forKey: "userToken")
                     UserDefaults.standard.removeObject(forKey: "userName")
                     UserDefaults.standard.removeObject(forKey: "userEmail")
+                    UserDefaults.standard.removeObject(forKey: "heartCount")
+                    UserDefaults.standard.removeObject(forKey: "userBirthday")
+                    UserDefaults.standard.removeObject(forKey: "isMember")
                     
                     // 发送登出通知
                     DispatchQueue.main.async {
@@ -159,11 +166,11 @@ class JournalService {
             }
 
             let wrapper = try JSONDecoder().decode(JournalResponse.self, from: data)
-            print("   Parsed Journal: \(wrapper.journal)")
-            print("   Parsed Title: \(wrapper.title)")
-            print("   Parsed Status: \(wrapper.status)")
             print("   Parsed Journal ID: \(wrapper.journal_id ?? -1)")
-            print("   Parsed User Heart: \(wrapper.user_heart)")
+            print("   Parsed Title: \(wrapper.title)")
+            print("   Parsed Content: \(wrapper.content)")
+            print("   Parsed Status: \(wrapper.status)")
+            print("   Parsed Emotion: \(wrapper.emotion)")
             
             // 检查状态
             guard wrapper.status == "success" else {
@@ -172,19 +179,17 @@ class JournalService {
             }
             
             // 检查内容是否为空或失败
-            if wrapper.journal.isEmpty || wrapper.journal == "生成失败" {
+            if wrapper.content.isEmpty || wrapper.content == "生成失败" {
                 print("❌ 日记接口 - 内容生成失败")
                 throw JournalServiceError.networkError("日记内容生成失败")
             }
             
             // 更新用户的心心值
-            if let userHeart = wrapper.user_heart {
-                UserDefaults.standard.set(userHeart, forKey: "heartCount")
-                print("🔍 日记接口 - 更新用户心心值: \(userHeart)")
-            }
+            // 注意：后端没有返回user_heart字段，所以这里暂时不更新
+            // 如果需要更新心心值，需要后端在响应中添加user_heart字段
             
             print("✅ 日记接口 - 成功生成日记")
-            return (wrapper.journal, wrapper.title, wrapper.journal_id)
+            return (wrapper.content, wrapper.title, wrapper.journal_id)
             
         } catch let error as JournalServiceError {
             throw error

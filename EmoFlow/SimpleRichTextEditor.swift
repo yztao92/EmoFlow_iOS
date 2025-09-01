@@ -33,11 +33,12 @@ struct SimpleRichTextEditor: UIViewRepresentable {
         textView.autocapitalizationType = .sentences
         
         // 设置默认的输入属性，确保新输入的文本使用默认字体
-        let defaultFont = UIFont.systemFont(ofSize: 20, weight: .light)
+        let defaultFont = UIFont.systemFont(ofSize: 20, weight: .light) // 确保与显示时完全一致
         let defaultColor = UIColor.label
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .center // 默认居中对齐
-        paragraphStyle.lineSpacing = 10 // 设置行间距，让文本更易读
+        paragraphStyle.lineSpacing = 10 // 设置行间距，与显示时保持一致
+        paragraphStyle.lineHeightMultiple = 1.0 // 添加行高倍数，确保行高计算一致
         
         textView.typingAttributes = [
             .font: defaultFont,
@@ -95,15 +96,15 @@ struct SimpleRichTextEditor: UIViewRepresentable {
         if attributedText.string.isEmpty {
             textView.textAlignment = .center
         } else {
-            // 从富文本中获取对齐方式
+            // 从富文本中获取对齐方式，如果没有则默认居中
             if attributedText.length > 0 {
                 if let paragraphStyle = attributedText.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle {
                     textView.textAlignment = paragraphStyle.alignment
                 } else {
-                    textView.textAlignment = .left
+                    textView.textAlignment = .center // 改为居中对齐，与显示时保持一致
                 }
             } else {
-                textView.textAlignment = .left
+                textView.textAlignment = .center // 改为居中对齐
             }
         }
     }
@@ -127,11 +128,12 @@ struct SimpleRichTextEditor: UIViewRepresentable {
             }
             
             // 确保新输入的文本使用默认字体属性
-            let defaultFont = UIFont.systemFont(ofSize: 20, weight: .light)
+            let defaultFont = UIFont.systemFont(ofSize: 20, weight: .light) // 确保与显示时完全一致
             let defaultColor = UIColor.label
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.alignment = .center // 默认居中对齐
-            paragraphStyle.lineSpacing = 10 // 设置行间距，让文本更易读
+            paragraphStyle.lineSpacing = 10 // 设置行间距，与显示时保持一致
+            paragraphStyle.lineHeightMultiple = 1.0 // 添加行高倍数，确保行高计算一致
             
             textView.typingAttributes = [
                 .font: defaultFont,
@@ -150,11 +152,12 @@ struct SimpleRichTextEditor: UIViewRepresentable {
             }
             
             // 确保新输入的文本使用默认字体属性
-            let defaultFont = UIFont.systemFont(ofSize: 20, weight: .light)
+            let defaultFont = UIFont.systemFont(ofSize: 20, weight: .light) // 确保与显示时完全一致
             let defaultColor = UIColor.label
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.alignment = .center // 默认居中对齐
-            paragraphStyle.lineSpacing = 10 // 设置行间距，让文本更易读
+            paragraphStyle.lineSpacing = 10 // 设置行间距，与显示时保持一致
+            paragraphStyle.lineHeightMultiple = 1.0 // 添加行高倍数，确保行高计算一致
             
             textView.typingAttributes = [
                 .font: defaultFont,
@@ -172,6 +175,9 @@ struct SimpleRichTextEditor: UIViewRepresentable {
                 if attributedString.length > 0 {
                     if let paragraphStyle = attributedString.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle {
                         textView.textAlignment = paragraphStyle.alignment
+                    } else {
+                        // 如果没有段落样式，保持居中对齐
+                        textView.textAlignment = .center
                     }
                 } else {
                     // 空文本时保持居中对齐
@@ -344,7 +350,8 @@ class RichTextHelper {
         let attributedString = NSMutableAttributedString(attributedString: textView.attributedText)
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = alignment
-        paragraphStyle.lineSpacing = 10 // 设置行间距，让文本更易读
+        paragraphStyle.lineSpacing = 10 // 设置行间距，与显示时保持一致
+        paragraphStyle.lineHeightMultiple = 1.0 // 添加行高倍数，确保行高计算一致
         
         // 安全地应用段落样式
         if attributedString.length > 0 {

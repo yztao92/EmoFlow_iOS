@@ -10,12 +10,19 @@ struct SettingsView: View {
     @State private var username: String = UserDefaults.standard.string(forKey: "userName") ?? ""
     @State private var userEmail: String = UserDefaults.standard.string(forKey: "userEmail") ?? ""
     @State private var heartCount: Int = UserDefaults.standard.integer(forKey: "heartCount")
+    @State private var userBirthday: String? = nil
+    @State private var isMember: Bool = false
     @State private var showLogoutAlert = false
     @State private var showUsernameEditAlert = false
     @State private var tempUsername: String = ""
     @State private var isUpdatingUsername = false
     @State private var showUpdateError = false
     @State private var updateErrorMessage = ""
+    
+    // 生日编辑相关状态
+    @State private var showBirthdayPicker = false
+    @State private var selectedBirthday = Date()
+    @State private var isUpdatingBirthday = false
     
     // 用于控制应用重新启动到登录页面
     @Environment(\.dismiss) private var dismiss
@@ -42,30 +49,53 @@ struct SettingsView: View {
                 }
                 .padding()
                 
-                if !userEmail.isEmpty {
-                    Divider()
-                    HStack {
-                        Text("邮箱")
-                        Spacer()
-                        Text(userEmail)
-                            .foregroundColor(.secondary)
+                Divider()
+                HStack {
+                    Text("生日")
+                    Spacer()
+                    if isUpdatingBirthday {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        if let birthday = userBirthday, !birthday.isEmpty {
+                            // 已设置生日，只显示文本
+                            Text(birthday)
+                                .foregroundColor(.secondary)
+                        } else {
+                            // 未设置生日，显示可点击的"设置"按钮
+                            Button(action: {
+                                showBirthdayPicker = true
+                            }) {
+                                Text("设置")
+                                    .foregroundColor(.blue)
+                            }
+                        }
                     }
-                    .padding()
                 }
+                .padding()
+                
+                Divider()
+                HStack {
+                    Text("会员状态")
+                    Spacer()
+                    Text(isMember ? "会员用户" : "普通用户")
+                        .foregroundColor(isMember ? .yellow : .secondary)
+                }
+                .padding()
             }
             .background(ColorManager.cardbackground)
             .cornerRadius(12)
             
-                            // 心心卡片
-                HStack {
-                    Text("心心")
-                    Spacer()
-                    Text("\(heartCount)")
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-                .background(ColorManager.cardbackground)
-                .cornerRadius(12)
+            // 心心卡片
+            HStack {
+                Text("心心")
+                Spacer()
+                Text("\(heartCount)")
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .background(ColorManager.cardbackground)
+            .cornerRadius(12)
             
             // 退出登录卡片
             Button(role: .destructive) {
@@ -94,7 +124,8 @@ struct SettingsView: View {
                     dismiss()
                 }) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .medium))
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundColor(.primary)
                 }
             }
         }
@@ -120,10 +151,23 @@ struct SettingsView: View {
         } message: {
             Text("请输入您想要的用户名")
         }
+        .sheet(isPresented: $showBirthdayPicker) {
+            BirthdayPickerView(
+                selectedDate: $selectedBirthday,
+                onSave: { newDate in
+                    updateBirthdayOnBackend(newDate)
+                },
+                onCancel: {
+                    showBirthdayPicker = false
+                }
+            )
+        }
         .onAppear {
             // 更新用户信息显示
             username = UserDefaults.standard.string(forKey: "userName") ?? ""
             userEmail = UserDefaults.standard.string(forKey: "userEmail") ?? ""
+            userBirthday = UserDefaults.standard.string(forKey: "userBirthday")
+            isMember = UserDefaults.standard.bool(forKey: "isMember")
             
             // 初始化心心数值，如果UserDefaults中没有值则设置为20
             if UserDefaults.standard.object(forKey: "heartCount") == nil {
@@ -133,16 +177,34 @@ struct SettingsView: View {
                 heartCount = UserDefaults.standard.integer(forKey: "heartCount")
             }
             
-            // 每次进入设置页面时获取最新的心心数量
+            // 设置selectedBirthday的初始值
+            if let birthday = userBirthday, !birthday.isEmpty {
+                if let date = parseBirthdayString(birthday) {
+                    selectedBirthday = date
+                }
+            }
+            
+            // 每次进入设置页面时获取最新的用户信息（包含心心数量）
             Task {
                 do {
-                    let newHeartCount = try await UserHeartService.shared.fetchUserHeart()
+                    let userInfo = try await UserProfileService.shared.fetchUserProfile()
                     await MainActor.run {
-                        heartCount = newHeartCount
+                        username = userInfo.name
+                        userEmail = userInfo.email
+                        heartCount = userInfo.heart
+                        userBirthday = userInfo.birthday
+                        isMember = userInfo.is_member
+                        
+                        // 更新selectedBirthday
+                        if let birthday = userInfo.birthday, !birthday.isEmpty {
+                            if let date = parseBirthdayString(birthday) {
+                                selectedBirthday = date
+                            }
+                        }
                     }
-                    print("🔍 设置页面进入时获取心心数量: \(newHeartCount)")
+                    print("🔍 设置页面进入时获取用户信息: \(userInfo.name), 心心数量: \(userInfo.heart), 生日: \(userInfo.birthday ?? "未设置"), 会员状态: \(userInfo.is_member ? "是" : "否")")
                 } catch {
-                    print("⚠️ 设置页面进入时获取心心数量失败: \(error)")
+                    print("⚠️ 设置页面进入时获取用户信息失败: \(error)")
                 }
             }
         }
@@ -155,6 +217,9 @@ struct SettingsView: View {
         UserDefaults.standard.removeObject(forKey: "userToken")
         UserDefaults.standard.removeObject(forKey: "userName")
         UserDefaults.standard.removeObject(forKey: "userEmail")
+        UserDefaults.standard.removeObject(forKey: "heartCount")
+        UserDefaults.standard.removeObject(forKey: "userBirthday")
+        UserDefaults.standard.removeObject(forKey: "isMember")
         
         // 发送登出通知
         NotificationCenter.default.post(name: .logout, object: nil)
@@ -204,5 +269,48 @@ struct SettingsView: View {
                 print("❌ 用户名更新失败: \(error.localizedDescription)")
             }
         }
+    }
+    
+    // MARK: - 生日更新
+    /// 更新生日到后端
+    private func updateBirthdayOnBackend(_ newDate: Date) {
+        // 显示加载状态
+        isUpdatingBirthday = true
+        
+        Task {
+            do {
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                let birthdayString = dateFormatter.string(from: newDate)
+                
+                // 调用后端API更新生日
+                let userInfo = try await UserProfileService.shared.updateBirthday(birthdayString)
+                
+                await MainActor.run {
+                    // 更新本地显示
+                    userBirthday = userInfo.birthday
+                    isUpdatingBirthday = false
+                    showBirthdayPicker = false
+                }
+                
+                print("✅ 生日更新成功: \(birthdayString)")
+            } catch {
+                await MainActor.run {
+                    isUpdatingBirthday = false
+                    updateErrorMessage = error.localizedDescription
+                    showUpdateError = true
+                }
+                
+                print("❌ 生日更新失败: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    // MARK: - 日期解析
+    /// 将生日字符串解析为Date对象
+    private func parseBirthdayString(_ birthdayString: String) -> Date? {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        return dateFormatter.date(from: birthdayString)
     }
 }

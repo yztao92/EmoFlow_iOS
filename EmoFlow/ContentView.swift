@@ -226,7 +226,7 @@ struct ContentView: View {
                         let chatMessage = getEmotionChatMessage(emotionType)
                         navigationPath.append(AppRoute.chat(emotion: emotionType, initialMessage: chatMessage))
                     }) {
-                        Text("和我聊聊")
+                        Text("聊一下吧")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(currentEmotion.primary)
                             .frame(maxWidth: .infinity)
@@ -537,17 +537,17 @@ struct ContentView: View {
     private func getEmotionChatMessage(_ emotionType: EmotionType) -> String {
         switch emotionType {
         case .angry:
-            return "我现在感觉到很生气"
+            return "我现在感觉到生气"
         case .sad:
-            return "我现在感觉到很悲伤"
+            return "我现在感觉到悲伤"
         case .unhappy:
             return "我现在感觉到不开心"
         case .peaceful:
-            return "我现在心情感觉到很平和"
+            return "我现在感觉到平和"
         case .happy:
-            return "我现在感觉到蛮开心的"
+            return "我现在感觉到开心"
         case .happiness:
-            return "我现在感觉到很幸福"
+            return "我现在感觉到幸福"
         }
     }
     

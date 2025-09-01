@@ -64,9 +64,10 @@ struct ChatView: View {
     @State private var sessionID: String = UUID().uuidString
     @State private var emotions: [EmotionType] = []
     
-    // 添加键盘状态管理
+    // 优化键盘状态管理
     @State private var isKeyboardVisible = false
     @State private var keyboardHeight: CGFloat = 0
+    @State private var shouldScrollToBottom = false // 新增：控制是否需要滚动到底部
 
     @State private var showSavedAlert = false
     @State private var chatRecords: [ChatRecord] = RecordManager.loadAll()
@@ -79,6 +80,7 @@ struct ChatView: View {
     @State private var toastMessage = "" // toast消息内容
     @State private var didTimeout = false // 超时标志
     @FocusState private var isInputFocused: Bool
+    @State private var typingText: String? = nil
 
     var body: some View {
         ZStack {
@@ -126,27 +128,28 @@ struct ChatView: View {
                     }
                     .scrollDismissesKeyboard(.immediately)
                     .scrollIndicators(.hidden)
+                    // 统一滚动动画时长和逻辑
+                    .onChange(of: shouldScrollToBottom) { oldValue, newValue in
+                        if newValue {
+                            // 使用统一的滚动逻辑
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                withAnimation(.easeOut(duration: 0.25)) {
+                                    proxy.scrollTo("bottomSpacing", anchor: .bottom)
+                                }
+                                // 重置滚动标志
+                                shouldScrollToBottom = false
+                            }
+                        }
+                    }
                     .onChange(of: messages.count) { oldCount, newCount in
                         guard newCount > oldCount else { return }
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo("messages", anchor: .bottom)
-                        }
+                        // 新消息时滚动到底部
+                        shouldScrollToBottom = true
                     }
                     .onChange(of: isLoading) { oldValue, newValue in
                         if newValue {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                proxy.scrollTo("messages", anchor: .bottom)
-                            }
-                        }
-                    }
-                    .onChange(of: isKeyboardVisible) { oldValue, newValue in
-                        if newValue {
-                            // 键盘显示时，滚动到底部确保内容可见
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation(.easeOut(duration: 0.3)) {
-                                    proxy.scrollTo("messages", anchor: .bottom)
-                                }
-                            }
+                            // 加载状态时滚动到底部
+                            shouldScrollToBottom = true
                         }
                     }
                 }
@@ -177,9 +180,11 @@ struct ChatView: View {
                 .background(emotionBackgroundColor)
                 .padding(.bottom, isKeyboardVisible ? 0 : 0)
             }
-            .animation(.easeOut(duration: 0.3), value: isKeyboardVisible)
+            .animation(.easeOut(duration: 0.25), value: isKeyboardVisible) // 统一动画时长
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
-                withAnimation(.easeOut(duration: 0.3)) {
+                // 键盘即将显示时，标记需要滚动
+                shouldScrollToBottom = true
+                withAnimation(.easeOut(duration: 0.25)) {
                     isKeyboardVisible = true
                     if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
                         keyboardHeight = keyboardFrame.height
@@ -187,10 +192,11 @@ struct ChatView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-                // 键盘显示完成
+                // 键盘显示完成，确保滚动到底部
+                shouldScrollToBottom = true
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                withAnimation(.easeOut(duration: 0.3)) {
+                withAnimation(.easeOut(duration: 0.25)) {
                     isKeyboardVisible = false
                     keyboardHeight = 0
                 }
@@ -374,7 +380,12 @@ struct ChatView: View {
                     messages: sendingMessages
                 )
                 print("[LOG] ChatService.shared.sendMessage 成功, answer=\(answer)")
-                messages.append(.init(role: .assistant, content: answer, references: references))
+                // 原来是直接append完整内容
+                // messages.append(.init(role: .assistant, content: answer, references: references))
+                // 现在改为先插入空assistant消息，再逐字显示
+                let newMsg = ChatMessage(role: .assistant, content: "", references: references)
+                messages.append(newMsg)
+                startTypewriterEffect(fullText: answer)
             } catch {
                 print("[LOG] ChatService.shared.sendMessage 失败, error=\(error)")
                 
@@ -513,6 +524,32 @@ struct ChatView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     showToast = false
                 }
+            }
+        }
+    }
+
+    private func startTypewriterEffect(fullText: String) {
+        typingText = ""
+        let chars = Array(fullText)
+        Task {
+            for i in 0..<chars.count {
+                await MainActor.run {
+                    typingText = String(chars[0...i])
+                    // 实时更新最后一条assistant消息内容
+                    if let lastIdx = messages.lastIndex(where: { $0.role == .assistant }) {
+                        let oldMsg = messages[lastIdx]
+                        messages[lastIdx] = ChatMessage(
+                            id: oldMsg.id,
+                            role: oldMsg.role,
+                            content: typingText!,
+                            references: oldMsg.references
+                        )
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms/字
+            }
+            await MainActor.run {
+                typingText = nil // 结束打字机
             }
         }
     }

@@ -44,7 +44,7 @@ struct ChatMessagesView: View {
                         .frame(width: 36, height: 36)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     TextBubbleView(
-                        text: "AI 正在思考…",
+                        text: "",
                         color: Color.gray.opacity(0.18),
                         alignment: .leading,
                         isLoading: true
@@ -72,15 +72,15 @@ struct TextBubbleView: View {
                 ProgressView()
                     .progressViewStyle(.circular)
             }
-        Text(text)
+            Text(text)
         }
-            .padding(.vertical, 14)
+        .padding(.vertical, 14)
         .padding(.horizontal, 16)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(color)
                 .shadow(color: (colorScheme == .dark ? Color.black.opacity(0.18) : Color.gray.opacity(0.10)), radius: 6, x: 0, y: 2)
         )
-            .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: alignment)
+        .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: alignment)
     }
 }

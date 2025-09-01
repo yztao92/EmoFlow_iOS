@@ -83,24 +83,24 @@ class JournalDetailService {
             
             print("📡 日记详情接口 - HTTP状态码: \(httpResponse.statusCode)")
             
-            guard httpResponse.statusCode == 200 else {
-                print("❌ 日记详情接口 - HTTP错误: \(httpResponse.statusCode)")
+            // 添加 401 特殊处理
+            if httpResponse.statusCode == 401 {
+                // 清除本地 token
+                UserDefaults.standard.removeObject(forKey: "userToken")
+                UserDefaults.standard.removeObject(forKey: "userName")
+                UserDefaults.standard.removeObject(forKey: "userEmail")
+                UserDefaults.standard.removeObject(forKey: "heartCount")
+                UserDefaults.standard.removeObject(forKey: "userBirthday")
+                UserDefaults.standard.removeObject(forKey: "isMember")
                 
-                if httpResponse.statusCode == 401 {
-                    // 清除本地 token
-                    UserDefaults.standard.removeObject(forKey: "userToken")
-                    UserDefaults.standard.removeObject(forKey: "userName")
-                    UserDefaults.standard.removeObject(forKey: "userEmail")
-                    
-                    // 发送登出通知
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: .logout, object: nil)
-                    }
-                    
-                    throw JournalDetailServiceError.unauthorized
-                } else if httpResponse.statusCode == 404 {
-                    throw JournalDetailServiceError.notFound
-                } else {
+                // 发送登出通知
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .logout, object: nil)
+                }
+                
+                throw JournalDetailServiceError.unauthorized
+            } else {
+                guard httpResponse.statusCode == 200 else {
                     throw JournalDetailServiceError.networkError("HTTP \(httpResponse.statusCode)")
                 }
             }

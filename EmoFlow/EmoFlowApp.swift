@@ -34,13 +34,13 @@ struct EmoFlowApp: App {
                 if let _ = UserDefaults.standard.string(forKey: "userToken") {
                     isLoggedIn = true
                     
-                    // APP启动时获取最新的心心数量
+                    // APP启动时获取最新的用户信息（包含心心数量）
                     Task {
                         do {
-                            let heartCount = try await UserHeartService.shared.fetchUserHeart()
-                            print("🔍 APP启动时获取心心数量: \(heartCount)")
+                            let userInfo = try await UserProfileService.shared.fetchUserProfile()
+                            print("🔍 APP启动时获取用户信息: \(userInfo.name), 心心数量: \(userInfo.heart)")
                         } catch {
-                            print("⚠️ APP启动时获取心心数量失败: \(error)")
+                            print("⚠️ APP启动时获取用户信息失败: \(error)")
                         }
                     }
                 }

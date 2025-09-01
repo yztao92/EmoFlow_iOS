@@ -16,57 +16,57 @@ struct JournalContentView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // 情绪图标 - 页面居中显示
-            VStack(spacing: 0) {
-                Image(emotion?.iconName ?? "Happy")
-                    .resizable()
-                    .frame(width: 128, height: 128)
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.horizontal, 16)
-            .padding(.top, 0)
-            
-            // 标题显示 - 居中
-            if let title = title, !title.isEmpty {
-                Text(title)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 0)
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-            
-            // 内容显示 - 居中
-            VStack(spacing: 36) {
-                // 使用UITextView显示富文本内容
-                if let attributedString = content.htmlToAttributedString() {
-                    RichTextDisplayView(
-                        attributedString: attributedString,
-                        textColor: .primary
-                    )
-                    .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity) // 允许内容扩展到最大高度
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .onAppear {
-                        print("📝 JournalContentView - 显示内容，长度: \(content.count)")
-                        print("📝 JournalContentView - 内容预览: \(String(content.prefix(100)))...")
-                    }
-                } else {
-                    // 如果HTML转换失败，显示纯文本
-                    Text(content)
-                        .font(.system(size: 20, weight: .light))
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 16) {
+                // 情绪图标 - 页面居中显示
+                VStack(spacing: 0) {
+                    Image(emotion?.iconName ?? "Happy")
+                        .resizable()
+                        .frame(width: 128, height: 128)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 16)
+                .padding(.top, 0)
+                
+                // 标题显示 - 居中
+                if let title = title, !title.isEmpty {
+                    Text(title)
+                        .font(.system(size: 28, weight: .semibold))
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity) // 允许内容扩展到最大高度
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 0)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                
+                // 内容显示 - 居中，移除滚动限制
+                VStack(spacing: 36) {
+                    // 使用SwiftUI的Text组件显示富文本内容
+                    if let attributedString = content.htmlToAttributedString() {
+                        RichTextDisplayView(
+                            attributedString: attributedString,
+                            textColor: .primary,
+                            isScrollEnabled: false // 禁用内部滚动
+                        )
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
+                    } else {
+                        // 如果HTML转换失败，显示纯文本
+                        Text(content)
+                            .font(.system(size: 20, weight: .light))
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 200) // 移除maxHeight限制
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                    }
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 50) // 添加底部间距，确保内容完全可见
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .scrollDismissesKeyboard(.immediately)
     }
     
     private func formatDisplayTime() -> String {
