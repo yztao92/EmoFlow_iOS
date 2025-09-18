@@ -23,7 +23,6 @@ enum JournalUpdateServiceError: Error, LocalizedError {
 
 // MARK: - 日记更新请求模型
 struct JournalUpdateRequest: Codable {
-    let title: String?
     let content: String?
     let emotion: String?
 }
@@ -32,7 +31,6 @@ struct JournalUpdateRequest: Codable {
 struct JournalUpdateResponse: Codable {
     let status: String
     let journal_id: Int
-    let title: String
     let content: String
     let emotion: String
     let updated_fields: [String]
@@ -46,7 +44,7 @@ class JournalUpdateService {
     
     private init() {}
     
-    func updateJournal(journalId: Int, title: String, content: String, emotion: EmotionType) async throws -> JournalUpdateResponse {
+    func updateJournal(journalId: Int, content: String, emotion: EmotionType) async throws -> JournalUpdateResponse {
         guard let token = UserDefaults.standard.string(forKey: "userToken") else {
             throw NetworkError.noToken
         }
@@ -58,7 +56,6 @@ class JournalUpdateService {
         request.setValue(token, forHTTPHeaderField: "token")
         
         let requestBody = JournalUpdateRequest(
-            title: title,
             content: content,
             emotion: emotion.rawValue
         )

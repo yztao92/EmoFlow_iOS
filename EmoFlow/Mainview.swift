@@ -6,11 +6,13 @@
 //
 
 import SwiftUI
+import Combine
 
 struct MainView: View {
     @State private var navigationPath = NavigationPath()
     @State private var currentBackgroundColor: Color = Color(.systemGroupedBackground)
     @State private var currentSecondaryColor: Color = .primary
+    @State private var refreshJournalListTrigger = UUID()
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -61,9 +63,13 @@ struct MainView: View {
             .ignoresSafeArea(.keyboard)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             
-            // 统一的路由处理
+                        // 统一的路由处理
             .navigationDestination(for: AppRoute.self) { route in
-                createView(for: route)
+createView(for: route)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshJournalList"))) { _ in
+                print("🔍 MainView - 收到刷新通知")
+                refreshJournalListTrigger = UUID()
             }
         }
     }
@@ -73,12 +79,12 @@ struct MainView: View {
         switch route {
         case .chat(let emotion, let initialMessage):
             ChatView(emotion: emotion, initialMessage: initialMessage, navigationPath: $navigationPath)
-        case .journalCreate(let emotion):
-            JournalEditView(initialEmotion: emotion, navigationPath: $navigationPath)
+        case .journalCreate(let emotion, let emotionText):
+            JournalEditView(initialEmotion: emotion, navigationPath: $navigationPath, emotionText: emotionText)
         case .journalEdit(let record):
             JournalEditView(record: record, navigationPath: $navigationPath)
         case .journalList:
-            ChatHistoryView(navigationPath: $navigationPath)
+            ChatHistoryView(navigationPath: $navigationPath, refreshTrigger: refreshJournalListTrigger)
         case .journalDetail(let id):
             JournalDetailContainerView(journalId: id, navigationPath: $navigationPath)
         case .settings:

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // 弹窗管理器
 class ActionSheetManager: ObservableObject {
@@ -20,6 +21,7 @@ struct ChatHistoryView: View {
     @State private var isLoading = false // 添加加载状态
     @Binding var navigationPath: NavigationPath
     @StateObject private var actionSheetManager = ActionSheetManager()
+    let refreshTrigger: UUID
     
     // 月份选择器相关状态
     @State private var selectedDate = Date()
@@ -29,6 +31,19 @@ struct ChatHistoryView: View {
     @State private var showJournalSelector = false
     @State private var selectedDay = 0
     @State private var selectedDayRecords: [ChatRecord] = []
+    
+    // 日记预览弹窗相关状态
+    @State private var showJournalPreview = false
+    @State private var previewRecord: ChatRecord?
+    @State private var pendingPreviewRecord: ChatRecord? // 新增：待显示的记录
+    @State private var currentPreviewRecord: ChatRecord? // 新增：当前显示的记录
+    @State private var hasImagesInPreview = false // 新增：预览中是否有图片
+
+    @State private var isEditMode = false // 新增：是否为编辑模式
+    
+    // 情绪日记列表弹窗相关状态
+    @State private var showEmotionJournalList = false
+    @State private var selectedEmotion: EmotionType?
     
     // 按日期排序的记录
     private var sortedRecords: [ChatRecord] {
@@ -102,6 +117,8 @@ struct ChatHistoryView: View {
                     .foregroundColor(.primary)
             }
         )
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 MonthPickerView(
@@ -110,13 +127,23 @@ struct ChatHistoryView: View {
                 )
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
         .onAppear { 
             print("🔍 ChatHistoryView - onAppear")
             
-            // 正常加载本地数据
-            loadRecords()
+            // 第一次进入时强制刷新数据，确保数据是最新的
+            forceRefreshData()
             print("   records count: \(records.count)")
+        }
+        .onChange(of: refreshTrigger) { _ in
+            print("🔍 ChatHistoryView - refreshTrigger 变化，从本地加载数据")
+            // 直接从本地加载数据，因为数据已经在跳转前刷新好了
+            records = RecordManager.loadAll().sorted { $0.date > $1.date }
+            print("✅ ChatHistoryView - 已从本地加载 \(records.count) 条日记")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .journalDeleted)) { _ in
+            print("🔍 ChatHistoryView - 收到日记删除通知，重新加载数据")
+            // 重新加载数据以更新情绪占比和日历
+            forceRefreshData()
         }
         .confirmationDialog(
             "选择操作",
@@ -139,6 +166,64 @@ struct ChatHistoryView: View {
                 day: $selectedDay,
                 records: $selectedDayRecords,
                 isPresented: $showJournalSelector,
+                navigationPath: $navigationPath
+            )
+        }
+        .sheet(item: $currentPreviewRecord) { record in
+            FloatingModalView(
+                currentEmotion: EmotionData.emotions.first { $0.emotionType == record.emotion } ?? EmotionData.emotions[3],
+                mode: isEditMode ? .edit : .preview,
+                previewRecord: record,
+                onDelete: {
+                    print("🗑️ ChatHistoryView - onDelete 回调被调用")
+                    print("   要删除的 record.id: \(record.id.uuidString)")
+                    
+                    // 从当前记录列表中移除
+                    records.removeAll { $0.id == record.id }
+                    print("   ✅ 已从当前记录列表中移除")
+                    
+                    // 关闭预览弹窗
+                    currentPreviewRecord = nil
+                    print("   ✅ 已关闭预览弹窗")
+                },
+                onEdit: {
+                    print("🔄 ChatHistoryView onEdit 回调被调用 - 开始编辑")
+                    print("   record.id: \(record.id)")
+                    print("   当前内容: '\(record.plainTextContent)'")
+                    
+                    // 从预览模式切换到编辑模式
+                    print("   📝 从预览模式切换到编辑模式")
+                    showEditJournal(record: record)
+                },
+                onEditComplete: {
+                    print("🔄 ChatHistoryView onEditComplete 回调被调用 - 编辑完成")
+                    print("   record.id: \(record.id)")
+                    
+                    // 编辑完成，关闭弹窗并重新加载数据
+                    print("   📝 编辑完成，关闭弹窗")
+                    
+                    // 从本地缓存重新加载最新数据
+                    let latestRecords = RecordManager.loadAll().sorted { $0.date > $1.date }
+                    print("   🔄 从本地缓存加载了 \(latestRecords.count) 条记录")
+                    records = latestRecords
+                    
+                    // 关闭弹窗
+                    currentPreviewRecord = nil
+                    isEditMode = false
+                    print("   ✅ 已关闭弹窗")
+                },
+                isPresented: $showJournalPreview,
+                navigationPath: $navigationPath
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled(false)
+        }
+        .sheet(item: $selectedEmotion) { emotion in
+            EmotionJournalListSheet(
+                emotion: emotion,
+                selectedDate: selectedDate,
+                isPresented: $showEmotionJournalList,
                 navigationPath: $navigationPath
             )
         }
@@ -168,50 +253,21 @@ struct ChatHistoryView: View {
                     LazyVStack(spacing: 16) {
                         ForEach(filteredRecords) { record in
                             JournalEntryCard(
-                                sheetManager: actionSheetManager,
                                 record: record,
                                 onTap: {
-                                    // 确保使用最新的数据
-                                    if let backendId = record.backendId {
-                                        // 先检查缓存，如果缓存存在就直接使用
-                                        Task {
-                                            // 1. 首先尝试从缓存获取数据
-                                            if let cachedRecord = JournalDetailService.shared.getCachedJournalDetail(journalId: backendId) {
-                                                print("✅ 使用缓存的日记详情: journal_\(backendId)")
-                                                await MainActor.run {
-                                                    navigationPath.append(AppRoute.journalDetail(id: backendId))
-                                                }
-                                                return
-                                            }
-                                            
-                                            // 2. 缓存不存在，从后端获取
-                                            print("🔍 缓存不存在，从后端获取日记详情: journal_\(backendId)")
-                                            do {
-                                                let detailRecord = try await JournalDetailService.shared.fetchAndCacheJournalDetail(journalId: backendId)
-                                                await MainActor.run {
-                                                    navigationPath.append(AppRoute.journalDetail(id: backendId))
-                                                }
-                                            } catch {
-                                                print("❌ 获取日记详情失败: \(error)")
-                                                // 如果获取失败，使用本地数据
-                                                navigationPath.append(AppRoute.journalDetail(id: backendId))
-                                            }
-                                        }
-                                    } else {
-                                        // 没有 backendId，无法导航
-                                        print("⚠️ 无法导航：缺少 backendId")
+                                    print("🔘 日记卡片被点击")
+                                    print("   isLoading: \(isLoading)")
+                                    print("   record.id: \(record.id)")
+                                    print("   record.plainTextContent: '\(record.plainTextContent)'")
+                                    
+                                    // 只有在非加载状态下才允许点击
+                                    guard !isLoading else {
+                                        print("⚠️ 数据加载中，暂时禁用点击")
+                                        return
                                     }
-                                },
-                                onEdit: {
-                                    // 编辑逻辑：调用 onJournalSelected 回调，让 MainView 处理导航
-                                    if let backendId = record.backendId {
-                                        // 这里需要一个新的路由来处理编辑模式
-                                        // 暂时先导航到详情页面
-                                        navigationPath.append(AppRoute.journalDetail(id: backendId))
-                                    }
-                                },
-                                onDelete: {
-                                    delete(record)
+                                    
+                                    // 显示日记预览弹窗
+                                    showJournalPreview(record: record)
                                 }
                             )
                             .padding(.horizontal, 16)
@@ -243,6 +299,10 @@ struct ChatHistoryView: View {
                 showJournalSelector: $showJournalSelector,
                 selectedDay: $selectedDay,
                 selectedDayRecords: $selectedDayRecords,
+                onJournalPreview: showJournalPreview,
+                onEmotionTap: { emotion in
+                    handleEmotionTap(emotion: emotion)
+                },
                 navigationPath: $navigationPath
             )
         }
@@ -255,15 +315,57 @@ struct ChatHistoryView: View {
         }
     }
     
+    // 新增：强制刷新数据的方法
+    private func forceRefreshData() {
+        Task {
+            await MainActor.run {
+                isLoading = true
+                print("🔄 强制刷新数据...")
+            }
+            
+            // 先尝试从后端获取最新数据
+            do {
+                let newJournals = try await JournalListService.shared.fetchJournals(limit: 100, offset: 0)
+                print("   ✅ 从后端获取到 \(newJournals.count) 条日记")
+                
+                // 保存到本地缓存
+                RecordManager.saveAll(newJournals)
+                print("   ✅ 已更新本地缓存")
+                
+                // 更新UI
+                await MainActor.run {
+                    withAnimation {
+                        records = newJournals.sorted { $0.date > $1.date }
+                    }
+                    isLoading = false
+                    print("   ✅ 强制刷新完成，records count: \(records.count)")
+                }
+            } catch {
+                print("❌ 强制刷新失败: \(error)")
+                // 如果刷新失败，仍然加载本地数据
+                await loadRecordsAsync()
+            }
+        }
+    }
+    
     private func loadRecordsAsync() async {
         // 设置加载状态
         await MainActor.run {
             isLoading = true
+            print("🔍 ChatHistoryView - 开始异步加载数据")
         }
         
         // 在后台线程加载数据
         let loadedRecords = await Task.detached {
-            RecordManager.loadAll().sorted { $0.date > $1.date }
+            let records = RecordManager.loadAll().sorted { $0.date > $1.date }
+            print("🔍 后台线程加载完成，获取到 \(records.count) 条记录")
+            
+            // 调试：检查前几条记录的内容
+            for (index, record) in records.prefix(3).enumerated() {
+                print("   记录 \(index + 1): ID=\(record.id), summary='\(record.summary)', summary长度=\(record.summary.count)")
+            }
+            
+            return records
         }.value
         
         // 在主线程更新UI
@@ -271,6 +373,7 @@ struct ChatHistoryView: View {
             records = loadedRecords
             isLoading = false
             print("🔍 ChatHistoryView - 异步加载完成，records count: \(records.count)")
+            print("🔍 数据加载状态：isLoading = \(isLoading)")
         }
     }
     
@@ -324,15 +427,83 @@ struct ChatHistoryView: View {
             print("⚠️ 无法删除后端日记：缺少backendId")
         }
     }
+    
+    // 显示日记预览弹窗
+    private func showJournalPreview(record: ChatRecord) {
+        // 首先检查是否还在加载中
+        guard !isLoading else {
+            print("⚠️ 数据仍在加载中，暂时禁用预览")
+            return
+        }
+        
+        // 基本的数据验证（移除过于严格的检查）
+        print("🔍 准备显示日记预览")
+        print("   record.plainTextContent: '\(record.plainTextContent)'")
+        print("   record.summary: '\(record.summary)'")
+        print("   record.summary 长度: \(record.summary.count)")
+        print("   record.id: \(record.id)")
+        print("   record.backendId: \(record.backendId ?? -1)")
+        print("   record.messages count: \(record.messages.count)")
+        if !record.messages.isEmpty {
+            print("   第一条消息: '\(record.messages.first?.content ?? "nil")'")
+        }
+        
+        // 验证记录是否在当前的records数组中（放宽验证，添加详细日志）
+        let recordExists = records.contains(where: { $0.id == record.id })
+        print("🔍 记录验证结果: \(recordExists)")
+        print("   record.id: \(record.id)")
+        print("   current records count: \(records.count)")
+        
+        if !recordExists {
+            print("⚠️ 记录不在当前数据集中，但仍继续显示预览")
+            // 不再直接返回，允许显示预览
+        }
+        
+        print("✅ 日记数据完整，显示预览")
+        print("   record.plainTextContent: '\(record.plainTextContent)'")
+        print("   record.id: \(record.id)")
+        print("   isLoading: \(isLoading)")
+        print("   records count: \(records.count)")
+        
+        // 直接设置当前显示的记录
+        currentPreviewRecord = record
+        isEditMode = false // 默认为预览模式
+        print("🔍 currentPreviewRecord 已设置为: \(record.id)")
+        print("🔍 设置后的 currentPreviewRecord summary: '\(record.summary)'")
+        print("🔍 设置后的 currentPreviewRecord plainTextContent: '\(record.plainTextContent)'")
+        
+        // 直接设置弹窗状态，不使用延迟
+        print("🔍 准备显示弹窗，currentPreviewRecord: \(currentPreviewRecord?.id.uuidString ?? "nil")")
+        print("🔍 currentPreviewRecord 内容: '\(currentPreviewRecord?.plainTextContent ?? "nil")'")
+        print("🔍 currentPreviewRecord summary: '\(currentPreviewRecord?.summary ?? "nil")'")
+        // 使用 sheet(item:) 时，只需要设置 currentPreviewRecord，不需要 showJournalPreview
+        print("🔍 弹窗将通过 currentPreviewRecord 自动显示")
+    }
+    
+    // 显示编辑模式的弹窗
+    private func showEditJournal(record: ChatRecord) {
+        // 设置当前显示的记录和编辑模式
+        currentPreviewRecord = record
+        isEditMode = true
+        print("🔍 切换到编辑模式，record: \(record.id)")
+        
+        // 直接设置弹窗状态，不使用延迟
+        print("🔍 准备显示编辑弹窗，currentPreviewRecord: \(currentPreviewRecord?.id.uuidString ?? "nil")")
+        // 使用 sheet(item:) 时，只需要设置 currentPreviewRecord，不需要 showJournalPreview
+        print("🔍 编辑弹窗将通过 currentPreviewRecord 自动显示")
+    }
+    
+    // 显示情绪日记列表
+    private func handleEmotionTap(emotion: EmotionType) {
+        selectedEmotion = emotion
+        print("🔍 显示情绪日记列表，情绪: \(emotion.displayName)")
+    }
 }
 
 // 日记卡片组件
 struct JournalEntryCard: View {
-    @ObservedObject var sheetManager: ActionSheetManager
     let record: ChatRecord
     let onTap: () -> Void
-    let onEdit: () -> Void
-    let onDelete: () -> Void
     
     // 根据情绪获取对应的 primary 颜色
     private var emotionPrimaryColor: Color {
@@ -371,33 +542,27 @@ struct JournalEntryCard: View {
                     // 情绪图标
                     Image(record.emotion?.iconName ?? "Happy")
                         .resizable()
-                        .frame(width: 48, height: 48)
+                        .frame(width: 36, height: 36)
                     
                     // 日期和时间
                     HStack(spacing: 8) {
                         Text(formatDate(record.date))
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.primary)
                         
                         Text(formatTime(record.date))
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.primary)
                     }
                     
                     Spacer()
                     
-                    // More按钮 - 移到右上角
-                    Button(action: { 
-                        print("🔘 More按钮被点击")
-                        sheetManager.show(onEdit: onEdit, onDelete: onDelete)
-                    }) {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .frame(width: 60, height: 60) // 增大到 60x60
-                            .rotationEffect(.degrees(90))
+                    // 图片图标（如果有图片）
+                    if let imageUrls = record.image_urls, !imageUrls.isEmpty {
+                        Image(systemName: "photo")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(emotionPrimaryColor)
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -405,23 +570,27 @@ struct JournalEntryCard: View {
                 // 间隔 8px
                 Spacer().frame(height: 8)
                 
-                // 2. 日记标题
-                Text(record.title ?? "无标题")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 16)
+                // 2. 日记标题 - 已隐藏
+                // Text(record.title ?? "无标题")
+                //     .font(.system(size: 20, weight: .bold))
+                //     .foregroundColor(.primary)
+                //     .padding(.horizontal, 16)
                 
-                // 间隔 16px
-                Spacer().frame(height: 16)
+                // 间隔 4px
+                Spacer().frame(height: 4)
                 
-                // 3. 日记正文
-                Text(record.plainTextContent)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundColor(.secondary)
-                    .lineLimit(3)
-                    .multilineTextAlignment(.leading)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                // 3. 日记正文 - 只有内容不为空时才显示
+                if !record.plainTextContent.isEmpty {
+                    Text(record.plainTextContent)
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                } else {
+                    // 内容为空时，添加底部间距，与顶部保持一致
+                    Spacer().frame(height: 16)
+                }
             }
         }
         .background(ColorManager.cardbackground)
@@ -446,24 +615,7 @@ struct JournalEntryCard: View {
         return formatter.string(from: date)
     }
     
-    private func getEmotionText(_ emotion: EmotionType?) -> String {
-        guard let emotion = emotion else { return "未知情绪" }
-        
-        switch emotion {
-        case .peaceful:
-            return "无风无浪的一天"
-        case .happy:
-            return "今天蛮开心的"
-        case .unhappy:
-            return "今天我是不大高兴了"
-        case .sad:
-            return "唉，哭了"
-        case .angry:
-            return "哼，气死我得了"
-        case .happiness:
-            return "满满的幸福"
-        }
-    }
+
 }
 
 // 月份选择器组件
@@ -631,7 +783,10 @@ struct EmotionCalendarView: View {
     @Binding var showJournalSelector: Bool
     @Binding var selectedDay: Int
     @Binding var selectedDayRecords: [ChatRecord]
+    let onJournalPreview: (ChatRecord) -> Void // 添加预览回调
+    let onEmotionTap: (EmotionType) -> Void // 添加情绪点击回调
     @Binding var navigationPath: NavigationPath // 添加导航路径绑定
+    @State private var hasImagesInPreview = false // 新增：预览中是否有图片
     
     // 获取传入数据对应月份的数据
     private var currentMonthData: [Int: ChatRecord] {
@@ -740,10 +895,9 @@ struct EmotionCalendarView: View {
                                         let dayRecords = getDayRecords(for: day)
                                         print("点击日期 \(day)，找到 \(dayRecords.count) 篇日记")
                                         if dayRecords.count == 1 {
-                                            // 只有一个日记，直接跳转
-                                            if let record = dayRecords.first, let backendId = record.backendId {
-                                                // 导航到日记详情
-                                                navigationPath.append(AppRoute.journalDetail(id: backendId))
+                                            // 只有一个日记，显示预览弹窗
+                                            if let record = dayRecords.first {
+                                                onJournalPreview(record)
                                             }
                                         } else if dayRecords.count > 1 {
                                             // 多个日记，显示选择浮窗
@@ -775,7 +929,7 @@ struct EmotionCalendarView: View {
                 .padding(.horizontal, 16)
                 
                 // 情绪占比卡片
-                EmotionStatsCard(records: records)
+                EmotionStatsCard(records: records, onEmotionTap: onEmotionTap)
                     .padding(.horizontal, 16)
                 
                 // 去掉这个Spacer，它导致底部间距过大
@@ -861,6 +1015,7 @@ struct DayCell: View {
 // 情绪占比卡片组件
 struct EmotionStatsCard: View {
     let records: [ChatRecord]
+    let onEmotionTap: (EmotionType) -> Void // 添加点击回调
     
     // 计算当月各情绪的占比
     private var emotionStats: [(emotion: EmotionType, count: Int, percentage: Double)] {
@@ -884,20 +1039,19 @@ struct EmotionStatsCard: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 28) {
             // 情绪进度条
-            VStack(spacing: 12) {
-                ForEach(emotionStats, id: \.emotion) { stat in
-                    EmotionProgressBar(
-                        emotion: stat.emotion,
-                        percentage: stat.percentage,
-                        count: stat.count
-                    )
-                }
+            ForEach(emotionStats, id: \.emotion) { stat in
+                EmotionProgressBar(
+                    emotion: stat.emotion,
+                    percentage: stat.percentage,
+                    count: stat.count,
+                    onEmotionTap: onEmotionTap
+                )
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
         .background(ColorManager.cardbackground)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
@@ -909,57 +1063,56 @@ struct EmotionProgressBar: View {
     let emotion: EmotionType
     let percentage: Double
     let count: Int
+    let onEmotionTap: (EmotionType) -> Void // 添加点击回调
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                // 背景条 - 使用父容器的完整宽度
-                RoundedRectangle(cornerRadius: 25)
-                    .fill(Color.clear)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 25)
-                            .stroke(emotionColor, lineWidth: 1)
-                    )
-                    .frame(width: geometry.size.width, height: 52)
-                
-                // 进度填充 - 根据百分比计算宽度，但有最小宽度
-                let minWidth: CGFloat = 100 // 足够容纳icon和文字的最小宽度
-                let maxWidth = geometry.size.width - 4 // 减去左右各2px的padding
-                let progressWidth = max(minWidth, maxWidth * CGFloat(percentage / 100))
-                
-                RoundedRectangle(cornerRadius: 25)
-                    .fill(emotionColor)
-                    .frame(width: progressWidth, height: 48)
-                    .padding(.horizontal, 2)
-                    .padding(.vertical, 2)
-                
-                // 内容层（icon和百分比）- 根据彩色进度条宽度精确定位
-                HStack {
-                    // 情绪icon - 更大的圆圈底色，使用card底色
-                    ZStack {
-                        Circle()
-                            .fill(ColorManager.cardbackground)
-                            .frame(width: 44, height: 44)
+        HStack(alignment: .center, spacing: 12) {
+            // 情绪icon
+            Image(emotion.iconName)
+                .resizable()
+                .frame(width: 48, height: 48)
+            
+            // 进度条模块（整个模块可点击）
+            VStack(alignment: .leading, spacing: 4) {
+                // 进度条在上方
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        // 背景条
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(height: 8)
                         
-                        Image(emotion.iconName)
-                            .resizable()
-                            .frame(width: 42, height: 42)
+                        // 进度填充
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(emotionColor)
+                            .frame(width: geometry.size.width * CGFloat(percentage / 100), height: 8)
                     }
-                    .padding(.leading, 6)
+                }
+                .frame(height: 8)
+                
+                // 下方：情绪文字和百分比
+                HStack {
+                    // 情绪文字在左下角
+                    Text(emotion.displayName)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(emotionSecondaryColor)
                     
                     Spacer()
                     
-                    // 百分比 - 在彩色进度条内部，使用secondary颜色
+                    // 百分比在右下角
                     Text("\(Int(percentage))%")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(emotionSecondaryColor)
-                        .padding(.trailing, 8)
                 }
-                .frame(width: progressWidth, height: 52)
-                .zIndex(1)
             }
+            .contentShape(Rectangle()) // 让整个区域可点击
+            .onTapGesture {
+                onEmotionTap(emotion)
+            }
+            
+            Spacer()
         }
-        .frame(height: 52) // 给GeometryReader设置固定高度
+        .frame(height: 42)
     }
     
     // 获取情绪对应的颜色
@@ -1031,6 +1184,10 @@ struct JournalSelectorSheet: View {
     @Binding var isPresented: Bool
     @Binding var navigationPath: NavigationPath // 添加导航路径绑定
     
+    // 预览弹窗状态 - 使用 item 方式
+    @State private var currentPreviewRecord: ChatRecord?
+    @State private var hasImagesInPreview = false // 新增：预览中是否有图片
+    
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
@@ -1047,14 +1204,11 @@ struct JournalSelectorSheet: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(records) { record in
-                            JournalSelectorRow(record: record)
-                                                            .onTapGesture {
-                                // 处理日记选择，导航到日记详情
-                                if let backendId = record.backendId {
-                                    navigationPath.append(AppRoute.journalDetail(id: backendId))
+                            JournalSelectorRow(record: record, showDate: false)
+                                .onTapGesture {
+                                    // 显示预览弹窗 - 使用 item 方式
+                                    currentPreviewRecord = record
                                 }
-                                isPresented = false
-                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -1064,8 +1218,76 @@ struct JournalSelectorSheet: View {
             }
             .navigationBarHidden(true)
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .sheet(item: $currentPreviewRecord) { record in
+            FloatingModalView(
+                currentEmotion: EmotionData.emotions.first { $0.emotionType == record.emotion } ?? EmotionData.emotions[3],
+                mode: .preview,
+                previewRecord: record,
+                onDelete: {
+                    print("🗑️ 日记选择器 - onDelete 回调被调用")
+                    print("   要删除的 record.id: \(record.id.uuidString)")
+                    print("   要删除的 record.backendId: \(record.backendId ?? -1)")
+                    
+                    // 从当前记录列表中移除
+                    records.removeAll { $0.id == record.id }
+                    print("   ✅ 已从当前记录列表中移除")
+                    
+                    // 关闭预览弹窗
+                    currentPreviewRecord = nil
+                    isPresented = false
+                    print("   ✅ 已关闭预览弹窗")
+                },
+                onEdit: {
+                    // 开始编辑 - 不关闭弹窗，只是切换到编辑模式
+                    print("🔄 日记选择器 - 开始编辑日记")
+                    // 不关闭弹窗，让FloatingModalView内部处理编辑模式切换
+                },
+                onEditComplete: {
+                    // 编辑完成 - 关闭弹窗并重新加载数据
+                    print("🔄 日记选择器 - 编辑完成")
+                    
+                    // 重新加载本地数据
+                    let updatedRecords = RecordManager.loadAll()
+                    print("   🔄 重新加载了 \(updatedRecords.count) 条记录")
+                    
+                    // 筛选出指定日期的记录
+                    let calendar = Calendar.current
+                    let today = Date()
+                    let month = calendar.component(.month, from: today)
+                    let year = calendar.component(.year, from: today)
+                    
+                    let dayRecords = updatedRecords.filter { record in
+                        let recordDay = calendar.component(.day, from: record.date)
+                        let recordMonth = calendar.component(.month, from: record.date)
+                        let recordYear = calendar.component(.year, from: record.date)
+                        return recordDay == day && recordMonth == month && recordYear == year
+                    }
+                    
+                    // 更新当前记录列表
+                    records = dayRecords
+                    print("   ✅ 已更新第\(day)天的记录，数量: \(records.count)")
+                    
+                    // 关闭预览弹窗
+                    currentPreviewRecord = nil
+                    isPresented = false
+                    print("   ✅ 已关闭预览弹窗")
+                },
+                isPresented: .constant(false), // 使用 sheet(item:) 时不需要这个绑定
+                navigationPath: $navigationPath
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled(false)
+            .onChange(of: records) { newRecords in
+                // 当记录列表为空时，自动关闭弹窗
+                if newRecords.isEmpty {
+                    print("🔄 日记选择器记录为空，自动关闭弹窗")
+                    isPresented = false
+                }
+            }
+        }
     }
     
     // 格式化日期显示
@@ -1080,6 +1302,7 @@ struct JournalSelectorSheet: View {
 // 日记选择行组件
 struct JournalSelectorRow: View {
     let record: ChatRecord
+    let showDate: Bool // 是否显示日期
     
     var body: some View {
         HStack(spacing: 12) {
@@ -1088,19 +1311,25 @@ struct JournalSelectorRow: View {
                 .resizable()
                 .frame(width: 32, height: 32)
             
-            VStack(alignment: .leading, spacing: 4) {
-                // 标题
-                Text(record.title ?? "无标题")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.primary)
+            HStack {
+                // 正文内容（只显示一行）- 只有内容不为空时才显示
+                if !record.plainTextContent.isEmpty {
+                    Text(record.plainTextContent)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 
-                // 时间
-                Text(formatTime(record.date))
-                .font(.system(size: 14, weight: .regular))
-                .foregroundColor(.secondary)
+                Spacer()
             }
             
             Spacer()
+            
+            // 时间（根据showDate决定显示格式）
+            Text(showDate ? formatDateTime(record.date) : formatTime(record.date))
+                .font(.system(size: 14, weight: .regular))
+                .foregroundColor(.secondary)
             
             // 箭头
             Image(systemName: "chevron.right")
@@ -1118,4 +1347,139 @@ struct JournalSelectorRow: View {
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
     }
+    
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd日 HH:mm"
+        return formatter.string(from: date)
+    }
 }
+
+// 情绪日记列表弹窗组件
+struct EmotionJournalListSheet: View {
+    let emotion: EmotionType
+    let selectedDate: Date // 添加选择的日期参数
+    @Binding var isPresented: Bool
+    @Binding var navigationPath: NavigationPath
+    
+    // 预览弹窗状态
+    @State private var currentPreviewRecord: ChatRecord?
+    @State private var hasImagesInPreview = false // 新增：预览中是否有图片
+    // 本地数据状态
+    @State private var localRecords: [ChatRecord] = []
+    
+    // 筛选出该情绪在指定月份的日记
+    private var emotionRecords: [ChatRecord] {
+        let calendar = Calendar.current
+        let selectedMonth = calendar.component(.month, from: selectedDate)
+        let selectedYear = calendar.component(.year, from: selectedDate)
+        
+        let filteredRecords = localRecords.filter { record in
+            guard record.emotion == emotion else { return false }
+            
+            let recordMonth = calendar.component(.month, from: record.date)
+            let recordYear = calendar.component(.year, from: record.date)
+            
+            return recordMonth == selectedMonth && recordYear == selectedYear
+        }
+        .sorted { $0.date > $1.date }
+        
+        // 如果筛选后的记录为空，自动关闭弹窗
+        if filteredRecords.isEmpty && !localRecords.isEmpty {
+            DispatchQueue.main.async {
+                print("🔄 情绪日记列表为空，自动关闭弹窗")
+                isPresented = false
+            }
+        }
+        
+        return filteredRecords
+    }
+    
+    // 加载本地数据
+    private func loadLocalRecords() {
+        localRecords = RecordManager.loadAll()
+        print("🔄 EmotionJournalListSheet 加载了 \(localRecords.count) 条记录")
+    }
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                // 标题
+                Text("\(emotion.displayName)日记")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .padding(.top, 20)
+                    .onAppear {
+                        // 加载本地数据
+                        loadLocalRecords()
+                        let calendar = Calendar.current
+                        let month = calendar.component(.month, from: selectedDate)
+                        let year = calendar.component(.year, from: selectedDate)
+                        print("EmotionJournalListSheet 显示: emotion=\(emotion.displayName), 月份=\(month)月\(year)年, records count=\(emotionRecords.count)")
+                    }
+                
+                // 日记列表
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(emotionRecords) { record in
+                            JournalSelectorRow(record: record, showDate: true)
+                                .onTapGesture {
+                                    // 显示预览弹窗
+                                    currentPreviewRecord = record
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+                
+                Spacer()
+            }
+            .navigationBarHidden(true)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .sheet(item: $currentPreviewRecord) { record in
+            FloatingModalView(
+                currentEmotion: EmotionData.emotions.first { $0.emotionType == record.emotion } ?? EmotionData.emotions[3],
+                mode: .preview,
+                previewRecord: record,
+                onDelete: {
+                    print("🗑️ 情绪日记列表 - onDelete 回调被调用")
+                    print("   要删除的 record.id: \(record.id.uuidString)")
+                    print("   要删除的 record.backendId: \(record.backendId ?? -1)")
+                    
+                    // 重新加载本地数据
+                    loadLocalRecords()
+                    print("   ✅ 已重新加载本地数据")
+                    
+                    // 关闭预览弹窗
+                    currentPreviewRecord = nil
+                    isPresented = false
+                    print("   ✅ 已关闭预览弹窗")
+                },
+                onEdit: {
+                    // 开始编辑 - 不关闭弹窗，只是切换到编辑模式
+                    print("🔄 情绪日记列表 - 开始编辑日记")
+                    // 不关闭弹窗，让FloatingModalView内部处理编辑模式切换
+                },
+                onEditComplete: {
+                    // 编辑完成 - 关闭弹窗
+                    print("🔄 情绪日记列表 - 编辑完成")
+                    // 重新加载本地数据以显示编辑后的内容
+                    loadLocalRecords()
+                    print("   ✅ 已重新加载本地数据")
+                    // 关闭预览弹窗
+                    currentPreviewRecord = nil
+                    print("   ✅ 已关闭预览弹窗")
+                },
+                isPresented: .constant(true),
+                navigationPath: $navigationPath
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled(false)
+        }
+    }
+}
+
+

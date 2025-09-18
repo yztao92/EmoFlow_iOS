@@ -5,7 +5,7 @@ struct UserProfileUpdateRequest: Codable {
     let name: String
     let email: String
     let birthday: String?
-    let is_member: Bool
+    let subscription_status: String
 }
 
 // MARK: - 生日更新请求模型
@@ -13,7 +13,7 @@ struct BirthdayUpdateRequest: Codable {
     let name: String
     let email: String
     let birthday: String
-    let is_member: Bool
+    let subscription_status: String
 }
 
 // MARK: - 用户资料更新响应模型
@@ -41,9 +41,9 @@ struct UserInfo: Codable {
     let name: String
     let email: String
     let heart: Int
-    let is_member: Bool
     let birthday: String?
-    let membership_expires_at: String?
+    let subscription_status: String
+    let subscription_expires_at: String?
 }
 
 // MARK: - 用户资料服务
@@ -64,7 +64,7 @@ class UserProfileService {
         request.httpMethod = "GET"
         request.setValue(token, forHTTPHeaderField: "token")
         
-        print("🔍 获取用户信息接口 - 请求URL: \(url)")
+        print("🔍 获取用户信息接口 - 开始请求")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
@@ -87,7 +87,8 @@ class UserProfileService {
                 UserDefaults.standard.removeObject(forKey: "userEmail")
                 UserDefaults.standard.removeObject(forKey: "heartCount")
                 UserDefaults.standard.removeObject(forKey: "userBirthday")
-                UserDefaults.standard.removeObject(forKey: "isMember")
+                UserDefaults.standard.removeObject(forKey: "subscriptionStatus")
+                UserDefaults.standard.removeObject(forKey: "subscriptionExpiresAt")
                 
                 // 发送登出通知
                 DispatchQueue.main.async {
@@ -109,7 +110,8 @@ class UserProfileService {
             UserDefaults.standard.set(response.user.email, forKey: "userEmail")
             UserDefaults.standard.set(response.user.heart, forKey: "heartCount")
             UserDefaults.standard.set(response.user.birthday, forKey: "userBirthday")
-            UserDefaults.standard.set(response.user.is_member, forKey: "isMember")
+            UserDefaults.standard.set(response.user.subscription_status, forKey: "subscriptionStatus")
+            UserDefaults.standard.set(response.user.subscription_expires_at, forKey: "subscriptionExpiresAt")
             
             return response.user
         } catch {
@@ -134,7 +136,7 @@ class UserProfileService {
             name: UserDefaults.standard.string(forKey: "userName") ?? "",
             email: UserDefaults.standard.string(forKey: "userEmail") ?? "",
             birthday: newBirthday,
-            is_member: UserDefaults.standard.bool(forKey: "isMember")
+            subscription_status: UserDefaults.standard.string(forKey: "subscriptionStatus") ?? "inactive"
         )
         
         do {
@@ -168,7 +170,8 @@ class UserProfileService {
                 UserDefaults.standard.removeObject(forKey: "userEmail")
                 UserDefaults.standard.removeObject(forKey: "heartCount")
                 UserDefaults.standard.removeObject(forKey: "userBirthday")
-                UserDefaults.standard.removeObject(forKey: "isMember")
+                UserDefaults.standard.removeObject(forKey: "subscriptionStatus")
+                UserDefaults.standard.removeObject(forKey: "subscriptionExpiresAt")
                 
                 // 发送登出通知
                 DispatchQueue.main.async {
@@ -190,7 +193,8 @@ class UserProfileService {
             UserDefaults.standard.set(response.user.email, forKey: "userEmail")
             UserDefaults.standard.set(response.user.heart, forKey: "heartCount")
             UserDefaults.standard.set(response.user.birthday, forKey: "userBirthday")
-            UserDefaults.standard.set(response.user.is_member, forKey: "isMember")
+            UserDefaults.standard.set(response.user.subscription_status, forKey: "subscriptionStatus")
+            UserDefaults.standard.set(response.user.subscription_expires_at, forKey: "subscriptionExpiresAt")
             
             return response.user
         } catch {
@@ -215,7 +219,7 @@ class UserProfileService {
             name: newName,
             email: UserDefaults.standard.string(forKey: "userEmail") ?? "",
             birthday: UserDefaults.standard.string(forKey: "userBirthday"),
-            is_member: UserDefaults.standard.bool(forKey: "isMember")
+            subscription_status: UserDefaults.standard.string(forKey: "subscriptionStatus") ?? "inactive"
         )
         
         do {
@@ -249,7 +253,8 @@ class UserProfileService {
                 UserDefaults.standard.removeObject(forKey: "userEmail")
                 UserDefaults.standard.removeObject(forKey: "heartCount")
                 UserDefaults.standard.removeObject(forKey: "userBirthday")
-                UserDefaults.standard.removeObject(forKey: "isMember")
+                UserDefaults.standard.removeObject(forKey: "subscriptionStatus")
+                UserDefaults.standard.removeObject(forKey: "subscriptionExpiresAt")
                 
                 // 发送登出通知
                 DispatchQueue.main.async {
@@ -271,7 +276,8 @@ class UserProfileService {
             UserDefaults.standard.set(response.user.email, forKey: "userEmail")
             UserDefaults.standard.set(response.user.heart, forKey: "heartCount")
             UserDefaults.standard.set(response.user.birthday, forKey: "userBirthday")
-            UserDefaults.standard.set(response.user.is_member, forKey: "isMember")
+            UserDefaults.standard.set(response.user.subscription_status, forKey: "subscriptionStatus")
+            UserDefaults.standard.set(response.user.subscription_expires_at, forKey: "subscriptionExpiresAt")
             
             return response.user
         } catch {

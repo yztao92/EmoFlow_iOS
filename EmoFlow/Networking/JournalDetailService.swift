@@ -107,7 +107,7 @@ class JournalDetailService {
             
             // 4. 解析响应数据
             let wrapper = try JSONDecoder().decode(JournalDetailResponse.self, from: data)
-            print("✅ 日记详情接口 - 成功获取日记详情，ID: \(wrapper.journal.id)")
+            print("✅ 日记详情接口 - 成功获取日记详情，ID: \(wrapper.journal.journal_id)")
             
             // 5. 转换为ChatRecord格式
             guard let chatRecord = convertJournalDataToChatRecord(wrapper.journal) else {
@@ -197,10 +197,9 @@ class JournalDetailService {
     
     /// 将后端JournalData转换为前端ChatRecord
     private func convertJournalDataToChatRecord(_ journalData: JournalData) -> ChatRecord? {
-        // 转换消息格式
-        let messages = journalData.messages.map { dto in
-            ChatMessage(role: dto.role == "user" ? .user : .assistant, content: dto.content)
-        }
+        // 由于后端不再返回messages字段，我们需要创建一个空的messages数组
+        // 或者通过其他方式获取对话历史
+        let messages: [ChatMessage] = []
         
         // 转换时间格式，使用创建时间
         let date = parseBackendTime(journalData.created_at)
@@ -215,15 +214,23 @@ class JournalDetailService {
             emotion = inferEmotionFromContent(journalData.content)
         }
         
+        // 调试图片数据
+        print("🔍 JournalDetailService - 转换日记数据:")
+        print("   日记ID: \(journalData.journal_id)")
+        print("   图片IDs: \(journalData.images ?? [])")
+        print("   图片URLs: \(journalData.image_urls ?? [])")
+        
         return ChatRecord(
             id: UUID(), // 前端使用UUID，后端使用Int
-            backendId: journalData.id, // 保存后端ID
+            backendId: journalData.journal_id, // 保存后端ID
             date: date, // 使用创建时间
-            messages: messages,
-            summary: journalData.contentHtml, // 现在后端已修复，可以使用contentHtml
+            messages: messages, // 空数组，需要通过历史记录接口获取
+            summary: journalData.content, // 使用 content 字段
             emotion: emotion,
-            title: journalData.title,
-            originalTimeString: journalData.created_at // 保存原始时间字符串
+            title: nil, // 新格式中没有 title 字段
+            originalTimeString: journalData.created_at, // 保存原始时间字符串
+            images: journalData.images, // 图片ID列表
+            image_urls: journalData.image_urls // 图片URL列表
         )
     }
     

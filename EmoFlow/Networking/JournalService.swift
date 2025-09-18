@@ -8,23 +8,19 @@
 import UIKit
 import Foundation
 
-// MARK: - 请求结构 (与后端ChatRequest保持一致)
+// MARK: - 请求结构 (与后端JournalRequest保持一致)
 struct JournalRequestPayload: Codable {
     let session_id: String
-    let messages: [ChatMessageDTO]
-    let emotion: String?  // 添加emotion字段
+    let emotion: String  // 情绪字段，必填
 }
 
 // MARK: - 响应结构
 struct JournalResponse: Codable {
     let journal_id: Int?
-    let title: String
     let content: String
-    let content_html: String
-    let content_plain: String
-    let content_format: String
-    let is_safe: Bool
     let emotion: String
+    let images: [String]?  // 图片ID列表
+    let image_urls: [String]?  // 图片URL列表
     let status: String
 }
 
@@ -61,8 +57,8 @@ class JournalService {
 
     /// 生成心情日记
     func generateJournal(
-        emotions: [EmotionType],
-        messages: [ChatMessageDTO]
+        emotion: EmotionType,
+        sessionID: String
     ) async throws -> (String, String, Int?) {  // 返回 (journal, title, journal_id)
         // 检查心心数量是否足够（生成日记需要至少4个心心）
         let currentHeartCount = UserDefaults.standard.integer(forKey: "heartCount")
@@ -86,34 +82,25 @@ class JournalService {
         request.addValue(token, forHTTPHeaderField: "token")
         print("🔍 日记接口 - 添加认证token: \(token.prefix(10))...")
 
-        // 2. 准备 session_id（identifierForVendor 是 @MainActor 隔离的，需要 await）
-        let vendor = await UIDevice.current.identifierForVendor
-        let sessionID = vendor?.uuidString ?? UUID().uuidString
+        // 2. 使用传入的 session_id（确保与聊天使用相同的会话ID）
+        print("🔍 日记接口 - 使用传入的Session ID: \(sessionID)")
 
         // 3. 构造请求体
         let payload = JournalRequestPayload(
             session_id: sessionID,
-            messages: messages,
-            emotion: emotions.first?.rawValue  // 取第一个emotion
+            emotion: emotion.rawValue
         )
         
         // 调试：打印发送给后端的数据
         print("🔍 日记接口 - 前端发送给后端的数据:")
         print("   URL: \(url)")
         print("   Session ID: \(sessionID)")
-        print("   Messages Count: \(messages.count)")
-        for (index, message) in messages.enumerated() {
-            print("   Message \(index + 1): role=\(message.role), content=\(message.content)")
-        }
+        print("   Emotion: \(emotion.rawValue)")
         
         // 将payload转换为字典以便打印
         let payloadDict: [String: Any] = [
             "session_id": sessionID,
-            "messages": messages.map { [
-                "role": $0.role,
-                "content": $0.content
-            ] },
-            "emotion": emotions.first?.rawValue ?? ""
+            "emotion": emotion.rawValue
         ]
         print("   JSON Payload: \(payloadDict)")
         
@@ -167,7 +154,6 @@ class JournalService {
 
             let wrapper = try JSONDecoder().decode(JournalResponse.self, from: data)
             print("   Parsed Journal ID: \(wrapper.journal_id ?? -1)")
-            print("   Parsed Title: \(wrapper.title)")
             print("   Parsed Content: \(wrapper.content)")
             print("   Parsed Status: \(wrapper.status)")
             print("   Parsed Emotion: \(wrapper.emotion)")
@@ -189,7 +175,7 @@ class JournalService {
             // 如果需要更新心心值，需要后端在响应中添加user_heart字段
             
             print("✅ 日记接口 - 成功生成日记")
-            return (wrapper.content, wrapper.title, wrapper.journal_id)
+            return (wrapper.content, "", wrapper.journal_id)
             
         } catch let error as JournalServiceError {
             throw error

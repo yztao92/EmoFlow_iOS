@@ -25,5 +25,9 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>此应用需要访问相机来拍照并分享到日记中</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>此应用需要访问相册来选择图片并分享到日记中</string>
 </dict>
 </plist>

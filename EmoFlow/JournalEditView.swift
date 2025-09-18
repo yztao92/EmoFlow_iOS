@@ -4,18 +4,12 @@ struct JournalEditView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var navigationPath: NavigationPath
     @State private var title: String = ""
-    @State private var attributedText: NSAttributedString = NSAttributedString(string: "")
+    @State private var content: String = ""
     @State private var selectedEmotion: EmotionType
     @State private var isSaving = false
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
-    
-    // 富文本编辑状态
-    @State private var textAlignment: NSTextAlignment = .center
-    @State private var showRichTextToolbar = false
-    
-    // 富文本编辑器引用
-    @State private var textViewRef: UITextView?
+    @StateObject private var imageManager = ImageManager()
     
     // 创建成功后的回调
     var onJournalCreated: ((Int) -> Void)? = nil
@@ -25,33 +19,28 @@ struct JournalEditView: View {
     var isEditMode: Bool = false
     // 编辑时的日记ID
     var editJournalId: Int? = nil
+    // 编辑时的ChatRecord（用于加载现有图片）
+    private var editRecord: ChatRecord? = nil
     
     // 情绪选项
     private let emotionOptions: [EmotionType] = [.angry, .sad, .unhappy, .peaceful, .happy, .happiness]
     
-    init(initialEmotion: EmotionType = .peaceful, navigationPath: Binding<NavigationPath>, isEditMode: Bool = false, editJournalId: Int? = nil, initialTitle: String = "", initialContent: String = "", initialHTMLContent: String = "") {
+    init(initialEmotion: EmotionType = .peaceful, navigationPath: Binding<NavigationPath>, isEditMode: Bool = false, editJournalId: Int? = nil, initialTitle: String = "", initialContent: String = "", initialHTMLContent: String = "", emotionText: String? = nil) {
         self._selectedEmotion = State(initialValue: initialEmotion)
-        // 创建模式时，标题默认为情绪数据名称
-        let defaultTitle = isEditMode ? initialTitle : initialEmotion.emotionDataName
+        // 创建模式时，优先使用传入的情绪文本，否则使用情绪数据名称
+        let defaultTitle = isEditMode ? initialTitle : (emotionText ?? initialEmotion.emotionDataName)
         self._title = State(initialValue: defaultTitle)
         self._navigationPath = navigationPath
         
-        // 处理初始内容：从HTML转换为富文本
+        // 处理初始内容
         if !initialHTMLContent.isEmpty {
-            self._attributedText = State(initialValue: RichTextHelper.htmlToAttributedString(initialHTMLContent))
-        } else if !initialContent.isEmpty {
-            self._attributedText = State(initialValue: NSAttributedString(string: initialContent))
+            // 简单处理HTML内容，提取纯文本
+            self._content = State(initialValue: initialHTMLContent.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression))
         } else {
-            // 创建空的富文本，默认居中对齐
-            let emptyAttributedString = NSMutableAttributedString(string: "")
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.alignment = .center
-            emptyAttributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: 0))
-            self._attributedText = State(initialValue: emptyAttributedString)
+            self._content = State(initialValue: initialContent)
         }
         
-        // 默认居中对齐
-        self._textAlignment = State(initialValue: .center)
+
         
         self.isEditMode = isEditMode
         self.editJournalId = editJournalId
@@ -63,40 +52,31 @@ struct JournalEditView: View {
         self._title = State(initialValue: record.title ?? "")
         self._navigationPath = navigationPath
         
-        // 处理初始内容：从HTML转换为富文本
+        // 处理初始内容：从HTML提取纯文本
         if !record.summary.isEmpty {
-            let attributedString = RichTextHelper.htmlToAttributedString(record.summary)
-            // 确保转换后的富文本有正确的行间距
-            let mutableAttributedString = NSMutableAttributedString(attributedString: attributedString)
-            let fullRange = NSRange(location: 0, length: mutableAttributedString.length)
-            
-            // 从原有富文本中提取对齐方式
-            var originalAlignment: NSTextAlignment = .center // 默认居中对齐
-            if mutableAttributedString.length > 0 {
-                if let paragraphStyle = mutableAttributedString.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle {
-                    originalAlignment = paragraphStyle.alignment
-                }
-            }
-            
-            // 应用行间距到整个文本，但保持原有的对齐方式
-            if mutableAttributedString.length > 0 {
-                let paragraphStyle = NSMutableParagraphStyle()
-                paragraphStyle.alignment = originalAlignment // 保持原有的对齐方式
-                paragraphStyle.lineSpacing = 10 // 设置行间距，让文本更易读
-                mutableAttributedString.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
-            }
-            
-            self._attributedText = State(initialValue: mutableAttributedString)
-            // 使用原有的对齐方式
-            self._textAlignment = State(initialValue: originalAlignment)
+            let content = record.summary.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            self._content = State(initialValue: content)
         } else {
-            self._attributedText = State(initialValue: NSAttributedString(string: ""))
-            // 空内容时默认居中对齐
-            self._textAlignment = State(initialValue: .center)
+            self._content = State(initialValue: "")
         }
         
         self.isEditMode = true
         self.editJournalId = record.backendId
+        self.editRecord = record
+    }
+    
+    // 在编辑模式下加载现有图片
+    private func loadExistingImages() {
+        if isEditMode, let record = editRecord {
+            // 从ChatRecord中加载现有图片
+            imageManager.loadExistingImages(from: record.images, imageUrls: record.image_urls)
+            print("📸 JournalEditView - 加载现有图片: \(record.images?.count ?? 0) 张")
+        }
+    }
+    
+    // 在视图出现时加载现有图片
+    private func onAppear() {
+        loadExistingImages()
     }
     
 
@@ -148,66 +128,44 @@ struct JournalEditView: View {
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.bottom, 8) // 添加title到正文的间距
                         
-                        // 富文本内容输入
+                        // 文本内容输入
                         VStack(alignment: .leading, spacing: 0) {
-                            SimpleRichTextEditor(
-                                attributedText: $attributedText,
-                                placeholder: "写下你的心情...",
-                                textViewRef: $textViewRef,
-                                shouldFocus: true
-                            )
-                            .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 400)
-                            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TextEditorFocused"))) { _ in
-                                showRichTextToolbar = true
-                            }
-                            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("TextEditorUnfocused"))) { _ in
-                                showRichTextToolbar = false
-                            }
+                            TextEditor(text: $content)
+                                .font(.system(size: 16, weight: .light))
+                                .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 400)
+                                .overlay(
+                                    Group {
+                                        if content.isEmpty {
+                                            VStack {
+                                                HStack {
+                                                    Text("写下你的心情...")
+                                                        .foregroundColor(.secondary)
+                                                        .font(.system(size: 16, weight: .light))
+                                                    Spacer()
+                                                }
+                                                Spacer()
+                                            }
+                                            .allowsHitTesting(false)
+                                        }
+                                    }
+                                )
                         }
                         .padding(.horizontal, 16)
+                        
+                        // 图片管理区域
+                        ImageGridView(imageManager: imageManager)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
+                            .onAppear {
+                                print("📝 JournalEditView - ImageGridView added to view")
+                            }
                         
                         Spacer(minLength: 100)
                     }
                     .padding(.top, 0)
                 }
                 
-                // 富文本编辑工具栏 - 固定在底部，键盘上方
-                if showRichTextToolbar {
-                    RichTextToolbar(
-                        onBold: {
-                            if let textView = textViewRef {
-                                print("🔍 应用粗体")
-                                RichTextHelper.applyBold(to: textView)
-                            } else {
-                                print("❌ textViewRef 为空")
-                            }
-                        },
-                        onAlignment: {
-                            // 循环切换对齐方式
-                            switch textAlignment {
-                            case .left:
-                                textAlignment = .center
-                            case .center:
-                                textAlignment = .right
-                            case .right:
-                                textAlignment = .left
-                            default:
-                                textAlignment = .center
-                            }
-                            
-                            if let textView = textViewRef {
-                                print("🔍 应用对齐方式: \(textAlignment)")
-                                print("🔍 当前 textView.textAlignment: \(textView.textAlignment)")
-                                RichTextHelper.setAlignment(textAlignment, for: textView)
-                                print("🔍 应用后 textView.textAlignment: \(textView.textAlignment)")
-                            } else {
-                                print("❌ textViewRef 为空")
-                            }
-                        },
-                        currentAlignment: textAlignment
-                    )
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
+
             }
             
             // Loading 覆盖层
@@ -254,7 +212,7 @@ struct JournalEditView: View {
                         .font(.system(size: 18, weight: .medium))
                         .foregroundColor(getEmotionSecondaryColor())
                 }
-                .disabled(title.isEmpty || attributedText.string.isEmpty || isSaving)
+                .disabled(title.isEmpty || content.isEmpty || isSaving)
             }
         }
         .alert("保存失败", isPresented: $showErrorAlert) {
@@ -262,50 +220,15 @@ struct JournalEditView: View {
         } message: {
             Text(errorMessage)
         }
-
-
         .onAppear {
-            // 延迟一下再聚焦到文本编辑器
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                showRichTextToolbar = true
-                // 编辑模式下聚焦到文本末尾
-                if isEditMode {
-                    focusToEnd()
-                }
-            }
+            onAppear()
         }
+
+
+
     }
     
-    // 聚焦到文本末尾
-    private func focusToEnd() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            if let textView = textViewRef {
-                let length = textView.attributedText.length
-                if length > 0 {
-                    textView.selectedRange = NSRange(location: length, length: 0)
-                }
-                textView.becomeFirstResponder()
-            }
-        }
-    }
-    
-    // 获取对齐图标
-    private func getAlignmentIcon() -> String {
-        switch textAlignment {
-        case .left:
-            return "text.alignleft"
-        case .center:
-            return "text.aligncenter"
-        case .right:
-            return "text.alignright"
-        case .justified:
-            return "text.aligncenter"
-        case .natural:
-            return "text.aligncenter"
-        @unknown default:
-            return "text.aligncenter"
-        }
-    }
+
     
 
     
@@ -322,9 +245,8 @@ struct JournalEditView: View {
         // 显示 loading 状态
         isSaving = true
         
-        // 直接获取富文本内容并保存
-        let htmlContent = RichTextHelper.convertToHTML(attributedText)
-        saveJournalWithHTML(htmlContent)
+        // 直接获取文本内容并保存
+        saveJournalWithContent(content)
     }
     
 
@@ -367,7 +289,7 @@ struct JournalEditView: View {
         }
     }
     
-    private func saveJournalWithHTML(_ htmlContent: String) {
+    private func saveJournalWithContent(_ content: String) {
         // 显示 loading 状态
         isSaving = true
         
@@ -379,11 +301,15 @@ struct JournalEditView: View {
                         throw NetworkError.invalidResponse
                     }
                     
-                    let response = try await JournalUpdateService.shared.updateJournal(
+                    let keepImageIds = imageManager.getKeepImageIds()
+                    let addImageData = imageManager.getAddImageData()
+                    
+                    let _ = try await JournalUpdateWithImagesService.shared.updateJournal(
                         journalId: journalId,
-                        title: title,
-                        content: htmlContent,
-                        emotion: selectedEmotion
+                        content: content,
+                        emotion: selectedEmotion,
+                        keepImageIds: keepImageIds,
+                        addImageData: addImageData
                     )
                     
                     // 更新成功后刷新日记列表
@@ -401,10 +327,12 @@ struct JournalEditView: View {
                     }
                 } else {
                     // 创建模式：创建新日记
-                    let response = try await JournalCreateService.shared.createJournal(
-                        title: title,
-                        content: htmlContent,
-                        emotion: selectedEmotion
+                    let imageData = imageManager.getAddImageData()
+                    
+                    let response = try await JournalUpdateWithImagesService.shared.createJournal(
+                        content: content,
+                        emotion: selectedEmotion,
+                        imageData: imageData
                     )
                     
                     // 创建成功后刷新日记列表

@@ -61,4 +61,10 @@ extension Notification.Name {
     
     /// 日记更新通知：当日记被编辑或创建时发送此通知
     static let journalUpdated = Notification.Name("journalUpdated")
+    
+    /// 心心数量更新通知：当心心数量发生变化时发送此通知
+    static let heartCountUpdated = Notification.Name("heartCountUpdated")
+    
+    /// 日记删除通知：当日记被删除时发送此通知
+    static let journalDeleted = Notification.Name("journalDeleted")
 }

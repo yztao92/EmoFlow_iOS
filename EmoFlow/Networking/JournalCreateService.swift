@@ -23,18 +23,20 @@ enum JournalCreateServiceError: Error, LocalizedError {
 
 // MARK: - 日记创建请求模型
 struct JournalCreateRequest: Codable {
-    let title: String
     let content: String
     let emotion: String
+    let has_image: Bool // 是否有图片
+    let image_data: [String]? // Base64编码的图片数据列表
 }
 
 // MARK: - 日记创建响应模型
 struct JournalCreateResponse: Codable {
     let status: String
     let journal_id: Int
-    let title: String
     let content: String
     let emotion: String
+    let images: [String]? // 图片ID列表
+    let image_urls: [String]? // 图片URL列表
 }
 
 // MARK: - 日记创建服务
@@ -44,22 +46,25 @@ class JournalCreateService {
     
     private init() {}
     
-    func createJournal(title: String, content: String, emotion: EmotionType) async throws -> JournalCreateResponse {
+    func createJournal(content: String, emotion: EmotionType, imageData: [String]? = nil) async throws -> JournalCreateResponse {
         guard let token = UserDefaults.standard.string(forKey: "userToken") else {
             throw NetworkError.noToken
         }
         
-        let url = URL(string: "\(baseURL)/journal/create")!
+        let url = URL(string: "\(baseURL)/api/journal/create")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(token, forHTTPHeaderField: "token")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
+        let hasImage = imageData != nil && !imageData!.isEmpty
         let requestBody = JournalCreateRequest(
-            title: title,
             content: content,
-            emotion: emotion.rawValue
+            emotion: emotion.rawValue,
+            has_image: hasImage,
+            image_data: hasImage ? imageData : nil
         )
+        
         
         do {
             request.httpBody = try JSONEncoder().encode(requestBody)
@@ -67,8 +72,7 @@ class JournalCreateService {
             throw NetworkError.encodingError
         }
         
-        print("🔍 日记创建接口 - 请求URL: \(url)")
-        print("🔍 日记创建接口 - 请求数据: \(requestBody)")
+        print("🔍 日记创建接口 - 开始创建")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         

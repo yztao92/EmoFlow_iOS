@@ -11,7 +11,8 @@ enum AppRoute: Hashable {
     
     /// 创建日记页面
     /// - emotion: 当前情绪类型
-    case journalCreate(emotion: EmotionType)
+    /// - emotionText: 当前显示的情绪文本
+    case journalCreate(emotion: EmotionType, emotionText: String)
     
     /// 编辑日记页面
     /// - record: 日记记录

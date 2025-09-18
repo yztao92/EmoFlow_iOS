@@ -1,5 +1,10 @@
 import SwiftUI
 
+// 定义自动发送图片的通知
+extension Notification.Name {
+    static let autoSendImage = Notification.Name("autoSendImage")
+}
+
 struct ChatView: View {
     let emotion: EmotionType
     let initialMessage: String
@@ -59,9 +64,15 @@ struct ChatView: View {
     @State private var inputText: String = ""
     @State private var isLoading = false
     @State private var inputHeight: CGFloat = 32
+    @State private var selectedImage: UIImage? = nil
+    @State private var showImagePicker = false
+    @State private var showImageSourceActionSheet = false
+    @State private var imagePickerSourceType: UIImagePickerController.SourceType = .photoLibrary
+    @State private var showFullScreenImage = false
+    @State private var fullScreenImage: UIImage? = nil
 
     // 添加缺失的变量定义
-    @State private var sessionID: String = UUID().uuidString
+    @State private var sessionID: String = ""
     @State private var emotions: [EmotionType] = []
     
     // 优化键盘状态管理
@@ -81,6 +92,10 @@ struct ChatView: View {
     @State private var didTimeout = false // 超时标志
     @FocusState private var isInputFocused: Bool
     @State private var typingText: String? = nil
+    
+    // AI聊天loading状态管理
+    @State private var isLoadingLongTime = false // 是否加载超过10秒
+    @State private var loadingStartTime: Date? = nil // 开始加载的时间
 
     var body: some View {
         ZStack {
@@ -114,9 +129,15 @@ struct ChatView: View {
                                 ChatMessagesView(
                                     messages: messages,
                                     isLoading: isLoading,
+                                    isLoadingLongTime: isLoadingLongTime,
                                     userBubbleColor: userBubbleColor,
                                     userEmojiImageName: userEmojiImageName,
-                                    aiAvatarImageName: "AIicon"
+                                    aiAvatarImageName: "AIicon",
+                                    onImageTap: { image in
+                                        print("🔍 在ChatView中处理图片点击")
+                                        fullScreenImage = image
+                                        showFullScreenImage = true
+                                    }
                                 )
                                 
                                 // 底部间距
@@ -158,7 +179,38 @@ struct ChatView: View {
                 VStack(spacing: 0) {
                     Divider()
                     
+                    // 选中的图片预览（只在非自动发送模式下显示）
+                    if let selectedImage = selectedImage, !isLoading {
+                        HStack {
+                            Image(uiImage: selectedImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxHeight: 100)
+                                .cornerRadius(8)
+                            
+                            Button(action: {
+                                self.selectedImage = nil
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                    }
+                    
                     HStack(spacing: 8) {
+                        // 图片选择按钮
+                        Button(action: {
+                            showImageSourceActionSheet = true
+                        }) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 20))
+                                .foregroundColor(emotionSecondaryColor)
+                        }
+                        
                         TextField("消息", text: $inputText, axis: .vertical)
                             .textFieldStyle(PlainTextFieldStyle())
                             .padding(.horizontal, 12)
@@ -170,9 +222,9 @@ struct ChatView: View {
                         Button(action: send) {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 28))
-                                .foregroundColor(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : emotionSecondaryColor)
+                                .foregroundColor((inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedImage == nil) ? .gray : emotionSecondaryColor)
                         }
-                        .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                        .disabled((inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedImage == nil) || isLoading)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -201,6 +253,13 @@ struct ChatView: View {
                     keyboardHeight = 0
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .autoSendImage)) { _ in
+                // 自动发送图片
+                if selectedImage != nil {
+                    print("[LOG] 收到自动发送图片通知")
+                    send()
+                }
+            }
             .alert(isPresented: $showSavedAlert) {
                 Alert(title: Text("已存档"),
                       message: Text("本次聊天内容已保存到记录页"),
@@ -208,7 +267,7 @@ struct ChatView: View {
             }
             // 首次出现时自动插入初始消息并自动触发LLM回复
             .onAppear {
-                print("[LOG] ChatView onAppear, initialMessage=\(initialMessage), didInsertInitialMessage=\(didInsertInitialMessage), emotions=\(emotions)")
+                print("[LOG] ChatView onAppear")
                 
                 // 初始化 emotions 数组
                 if emotions.isEmpty {
@@ -223,7 +282,7 @@ struct ChatView: View {
                 
                 if !initialMessage.isEmpty && !didInsertInitialMessage {
                     isLoading = true // 先设置为true，保证UI立即显示loading
-                    print("[LOG] onAppear准备自动触发send(message: initialMessage)")
+                    print("[LOG] 自动触发初始消息")
                     didInsertInitialMessage = true
                     send(message: initialMessage)
                 }
@@ -240,10 +299,18 @@ struct ChatView: View {
                             navigationPath.removeLast()
                         }
                     }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 0) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 16, weight: .medium))
-                            Text("返回")
+                            
+                            Spacer().frame(width: 16)
+                            
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 12, weight: .medium))
+                            
+                            Spacer().frame(width: 8)
+                            
+                            Text("\(UserDefaults.standard.integer(forKey: "heartCount"))")
                                 .font(.system(size: 16, weight: .medium))
                         }
                     }
@@ -266,6 +333,25 @@ struct ChatView: View {
             .navigationBarBackButtonHidden(true)
             .onAppear {
                 print("🎨 ChatView 背景颜色: \(emotionBackgroundColor)")
+            }
+            .sheet(isPresented: $showImagePicker) {
+                ImagePicker(selectedImage: $selectedImage, sourceType: imagePickerSourceType, autoSend: true)
+            }
+            .actionSheet(isPresented: $showImageSourceActionSheet) {
+                ActionSheet(
+                    title: Text("选择图片"),
+                    buttons: [
+                        .default(Text("拍照")) {
+                            imagePickerSourceType = .camera
+                            showImagePicker = true
+                        },
+                        .default(Text("从相册选择")) {
+                            imagePickerSourceType = .photoLibrary
+                            showImagePicker = true
+                        },
+                        .cancel()
+                    ]
+                )
             }
             
             // 全局loading遮罩
@@ -307,6 +393,28 @@ struct ChatView: View {
                 .animation(.easeInOut, value: showToast)
             }
         }
+        .onAppear {
+            // 初始化会话ID（如果还没有的话）
+            if sessionID.isEmpty {
+                sessionID = UUID().uuidString
+                print("🔍 ChatView - 初始化会话ID: \(sessionID)")
+            }
+        }
+        .fullScreenCover(isPresented: $showFullScreenImage) {
+            if let fullScreenImage = fullScreenImage {
+                FullScreenImageView(image: fullScreenImage, isPresented: $showFullScreenImage)
+                    .onAppear {
+                        print("🔍 显示全屏图片查看器")
+                    }
+            } else {
+                Text("图片加载失败")
+                    .foregroundColor(.white)
+                    .background(Color.black)
+                    .onAppear {
+                        print("🔍 fullScreenImage 为 nil")
+                    }
+            }
+        }
     }
 
     // 无参数的 send 方法，用于按钮调用
@@ -317,9 +425,9 @@ struct ChatView: View {
     // 支持外部传入message参数的send方法
     private func send(message: String? = nil) {
         let trimmed = (message ?? inputText).trimmingCharacters(in: .whitespacesAndNewlines)
-        print("[LOG] send() called, message=\(String(describing: message)), trimmed=\(trimmed), isLoading=\(isLoading), emotions=\(emotions)")
-        guard !trimmed.isEmpty else {
-            print("[LOG] send() aborted: trimmed内容为空")
+        print("[LOG] send() called")
+        guard !trimmed.isEmpty || selectedImage != nil else {
+            print("[LOG] send() aborted: 内容和图片都为空")
             return
         }
         if trimmed.lowercased().hasPrefix("user:") || trimmed.lowercased().hasPrefix("assistant:") {
@@ -334,7 +442,7 @@ struct ChatView: View {
         let currentHeartCount = UserDefaults.standard.integer(forKey: "heartCount")
         guard currentHeartCount >= 2 else {
             // 心心数量不足，直接显示toast并拦截
-            toastMessage = "心心数量不足，聊天需要至少2个心心"
+            toastMessage = "星星数量不足，聊天需要至少2个心心"
             showToast = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 showToast = false
@@ -344,59 +452,72 @@ struct ChatView: View {
         }
         
         // 心心数量足够，继续发送消息
-        // 只在非initialMessage时append user消息
+        // 始终添加用户消息到聊天界面显示
         let isInitial = (message != nil)
+        
+        // 先保存图片数据，避免在清空selectedImage后丢失
+        // 压缩图片以减少文件大小，避免上传失败
+        let imageDataForSending = selectedImage?.jpegData(compressionQuality: 0.5)
+        
+        let userMessage = ChatMessage(role: .user, content: trimmed, imageData: imageDataForSending)
+        messages.append(userMessage)
         if !isInitial {
-            let userMessage = ChatMessage(role: .user, content: trimmed)
-            messages.append(userMessage)
             inputText = ""
+            selectedImage = nil
         }
         isLoading = true
-        print("[LOG] send() 发送给LLM, messages.count=\(messages.count), last=\(trimmed)")
-
-        // 构造要发给LLM的消息数组
-        let sendingMessages: [ChatMessageDTO]
-        if isInitial {
-            // 只发这一句话
-            sendingMessages = [ChatMessageDTO(role: "user", content: trimmed)]
-        } else {
-            sendingMessages = messages.map { ChatMessageDTO(role: $0.role.rawValue, content: $0.content) }
-        }
+        isLoadingLongTime = false
+        loadingStartTime = Date()
+        print("[LOG] 发送给LLM")
+        print("[LOG] 图片数据大小: \(imageDataForSending?.count ?? 0) bytes")
+        
+        // 启动10秒计时器
+        startLoadingTimer()
 
         Task {
             do {
-                print("[LOG] ChatService.shared.sendMessage 开始, sessionID=\(sessionID)")
-                print("[LOG] 传递给ChatService的参数:")
-                print("   Session ID: \(sessionID)")
-                print("   Emotions: \(emotions)")
-                print("   Messages Count: \(sendingMessages.count)")
-                for (index, msg) in sendingMessages.enumerated() {
-                    print("   Message \(index + 1): role=\(msg.role), content=\(msg.content)")
-                }
+                print("[LOG] ChatService 开始发送")
+                print("🔍 ChatView - 发送聊天消息，使用会话ID: \(sessionID)")
                 
-                let (answer, references) = try await ChatService.shared.sendMessage(
+                let answer = try await ChatService.shared.sendMessage(
                     sessionID: sessionID,
-                    emotions: emotions,
-                    messages: sendingMessages
+                    userMessage: trimmed,
+                    emotion: emotions.first,
+                    imageData: imageDataForSending
                 )
-                print("[LOG] ChatService.shared.sendMessage 成功, answer=\(answer)")
+                print("[LOG] ChatService 发送成功")
                 // 原来是直接append完整内容
-                // messages.append(.init(role: .assistant, content: answer, references: references))
+                // messages.append(.init(role: .assistant, content: answer, references: []))
                 // 现在改为先插入空assistant消息，再逐字显示
-                let newMsg = ChatMessage(role: .assistant, content: "", references: references)
+                let newMsg = ChatMessage(role: .assistant, content: "", references: [])
                 messages.append(newMsg)
                 startTypewriterEffect(fullText: answer)
             } catch {
-                print("[LOG] ChatService.shared.sendMessage 失败, error=\(error)")
+                print("[LOG] ChatService 发送失败: \(error)")
+                print("[LOG] 错误类型: \(type(of: error))")
+                print("[LOG] 错误描述: \(error.localizedDescription)")
                 
                 // 其他错误，显示通用错误消息
                 messages.append(.init(role: .assistant, content: "出错了，请重试"))
             }
             isLoading = false
+            isLoadingLongTime = false
+            loadingStartTime = nil
             print("🔍 ChatView - send() 方法中 isLoading 设置为 false")
         }
     }
 
+    // 启动loading计时器
+    private func startLoadingTimer() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+            // 如果还在loading状态，说明超过5秒了
+            if self.isLoading {
+                self.isLoadingLongTime = true
+                print("🔍 ChatView - 加载超过5秒，显示'互联网检索中'")
+            }
+        }
+    }
+    
     private func saveCurrentChat() {
         guard !messages.isEmpty else { return }
         
@@ -404,7 +525,7 @@ struct ChatView: View {
         let currentHeartCount = UserDefaults.standard.integer(forKey: "heartCount")
         guard currentHeartCount >= 4 else {
             // 心心数量不足，直接显示toast并拦截
-            toastMessage = "心心数量不足，生成日记需要至少4个心心"
+            toastMessage = "星星数量不足，生成日记需要至少4个心心"
             showToast = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 showToast = false
@@ -432,9 +553,10 @@ struct ChatView: View {
         }
         Task {
             do {
+                print("🔍 ChatView - 准备生成日记，使用会话ID: \(sessionID)")
                 let (journal, title, journalId) = try await JournalService.shared.generateJournal(
-                    emotions: [emotion],
-                    messages: messages.map { ChatMessageDTO(role: $0.role.rawValue, content: $0.content) }
+                    emotion: emotion,
+                    sessionID: sessionID
                 )
                 if didTimeout { return } // 超时后不再处理
                 print("📓 AI 生成的心情日记：\n\(journal)")
@@ -464,11 +586,10 @@ struct ChatView: View {
                             print("🔍 ChatView - 生成日记成功，准备跳转")
                             print("   日记ID: \(backendId)")
                             
-                            print("✅ ChatView - 调用导航，backendId: \(backendId)")
-                            // 清空导航栈，然后添加日记列表和详情页面
+                            print("✅ ChatView - 调用导航，跳转到日记列表")
+                            // 清空导航栈，然后跳转到日记列表
                             navigationPath = NavigationPath()
                             navigationPath.append(AppRoute.journalList)
-                            navigationPath.append(AppRoute.journalDetail(id: backendId))
                         }
                     }
                 } else {
@@ -488,15 +609,10 @@ struct ChatView: View {
                             if !didTimeout {
                                 isSaving = false
                                 // 跳转到最新日记的详情页
-                                if let backendId = latestJournal.backendId {
-                                    print("✅ ChatView - 调用导航，backendId: \(backendId)")
-                                    // 清空导航栈，然后添加日记列表和详情页面
-                                    navigationPath = NavigationPath()
-                                    navigationPath.append(AppRoute.journalList)
-                                    navigationPath.append(AppRoute.journalDetail(id: backendId))
-                                } else {
-                                    print("❌ ChatView - 最新日记没有 backendId")
-                                }
+                                print("✅ ChatView - 调用导航，跳转到日记列表")
+                                // 清空导航栈，然后跳转到日记列表
+                                navigationPath = NavigationPath()
+                                navigationPath.append(AppRoute.journalList)
                             }
                         }
                     } else {

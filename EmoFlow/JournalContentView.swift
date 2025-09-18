@@ -6,13 +6,15 @@ struct JournalContentView: View {
     let content: String
     let date: Date
     let originalTimeString: String?
+    let imageURLs: [String]?
     
-    init(emotion: EmotionType?, title: String?, content: String, date: Date, originalTimeString: String? = nil) {
+    init(emotion: EmotionType?, title: String?, content: String, date: Date, originalTimeString: String? = nil, imageURLs: [String]? = nil) {
         self.emotion = emotion
         self.title = title
         self.content = content
         self.date = date
         self.originalTimeString = originalTimeString
+        self.imageURLs = imageURLs
     }
     
     var body: some View {
@@ -28,37 +30,24 @@ struct JournalContentView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 0)
                 
-                // 标题显示 - 居中
-                if let title = title, !title.isEmpty {
-                    Text(title)
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundColor(.primary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 0)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
+
                 
                 // 内容显示 - 居中，移除滚动限制
                 VStack(spacing: 36) {
-                    // 使用SwiftUI的Text组件显示富文本内容
-                    if let attributedString = content.htmlToAttributedString() {
-                        RichTextDisplayView(
-                            attributedString: attributedString,
-                            textColor: .primary,
-                            isScrollEnabled: false // 禁用内部滚动
-                        )
+                    // 使用纯文本显示
+                    Text(content)
+                        .font(.system(size: 20, weight: .light))
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 200) // 移除maxHeight限制
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
+                    
+                    // 图片显示区域
+                    if let imageURLs = imageURLs, !imageURLs.isEmpty {
+                        JournalImagesView(imageURLs: imageURLs)
                     } else {
-                        // 如果HTML转换失败，显示纯文本
-                        Text(content)
-                            .font(.system(size: 20, weight: .light))
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, minHeight: 200) // 移除maxHeight限制
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+                        Color.clear
                     }
                 }
             }

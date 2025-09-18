@@ -1,8 +1,10 @@
 import Foundation
 import SwiftUI
 
-enum EmotionType: String, CaseIterable, Codable {  // ✅ 加上 Codable
+enum EmotionType: String, CaseIterable, Codable, Identifiable {  // ✅ 加上 Codable 和 Identifiable
     case angry, sad, unhappy, happy, peaceful, happiness
+    
+    var id: String { self.rawValue }
 }
 
 extension EmotionType {
@@ -51,13 +53,6 @@ extension EmotionType {
     }
     
     var emotionDataName: String {
-        switch self {
-        case .angry: return "哼，气死我得了"
-        case .sad: return "唉，哭了"
-        case .unhappy: return "今天我是不大高兴了"
-        case .peaceful: return "无风无浪的一天"
-        case .happy: return "今天蛮开心的"
-        case .happiness: return "满满的幸福"
-        }
+        return self.displayName
     }
 }

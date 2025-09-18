@@ -9,9 +9,8 @@ import SwiftUI
 struct SettingsView: View {
     @State private var username: String = UserDefaults.standard.string(forKey: "userName") ?? ""
     @State private var userEmail: String = UserDefaults.standard.string(forKey: "userEmail") ?? ""
-    @State private var heartCount: Int = UserDefaults.standard.integer(forKey: "heartCount")
     @State private var userBirthday: String? = nil
-    @State private var isMember: Bool = false
+    @State private var subscriptionStatus: String = "inactive"
     @State private var showLogoutAlert = false
     @State private var showUsernameEditAlert = false
     @State private var tempUsername: String = ""
@@ -78,24 +77,14 @@ struct SettingsView: View {
                 HStack {
                     Text("会员状态")
                     Spacer()
-                    Text(isMember ? "会员用户" : "普通用户")
-                        .foregroundColor(isMember ? .yellow : .secondary)
+                    Text(subscriptionStatus == "active" ? "Pro用户" : "普通用户")
+                        .foregroundColor(subscriptionStatus == "active" ? .yellow : .secondary)
                 }
                 .padding()
             }
             .background(ColorManager.cardbackground)
             .cornerRadius(12)
             
-            // 心心卡片
-            HStack {
-                Text("心心")
-                Spacer()
-                Text("\(heartCount)")
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-            .background(ColorManager.cardbackground)
-            .cornerRadius(12)
             
             // 退出登录卡片
             Button(role: .destructive) {
@@ -167,15 +156,8 @@ struct SettingsView: View {
             username = UserDefaults.standard.string(forKey: "userName") ?? ""
             userEmail = UserDefaults.standard.string(forKey: "userEmail") ?? ""
             userBirthday = UserDefaults.standard.string(forKey: "userBirthday")
-            isMember = UserDefaults.standard.bool(forKey: "isMember")
+            subscriptionStatus = UserDefaults.standard.string(forKey: "subscriptionStatus") ?? "inactive"
             
-            // 初始化心心数值，如果UserDefaults中没有值则设置为20
-            if UserDefaults.standard.object(forKey: "heartCount") == nil {
-                UserDefaults.standard.set(20, forKey: "heartCount")
-                heartCount = 20
-            } else {
-                heartCount = UserDefaults.standard.integer(forKey: "heartCount")
-            }
             
             // 设置selectedBirthday的初始值
             if let birthday = userBirthday, !birthday.isEmpty {
@@ -191,9 +173,8 @@ struct SettingsView: View {
                     await MainActor.run {
                         username = userInfo.name
                         userEmail = userInfo.email
-                        heartCount = userInfo.heart
                         userBirthday = userInfo.birthday
-                        isMember = userInfo.is_member
+                        subscriptionStatus = userInfo.subscription_status
                         
                         // 更新selectedBirthday
                         if let birthday = userInfo.birthday, !birthday.isEmpty {
@@ -202,7 +183,7 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    print("🔍 设置页面进入时获取用户信息: \(userInfo.name), 心心数量: \(userInfo.heart), 生日: \(userInfo.birthday ?? "未设置"), 会员状态: \(userInfo.is_member ? "是" : "否")")
+                    print("🔍 设置页面进入时获取用户信息: \(userInfo.name), 心心数量: \(userInfo.heart), 生日: \(userInfo.birthday ?? "未设置"), 订阅状态: \(userInfo.subscription_status)")
                 } catch {
                     print("⚠️ 设置页面进入时获取用户信息失败: \(error)")
                 }
@@ -217,9 +198,9 @@ struct SettingsView: View {
         UserDefaults.standard.removeObject(forKey: "userToken")
         UserDefaults.standard.removeObject(forKey: "userName")
         UserDefaults.standard.removeObject(forKey: "userEmail")
-        UserDefaults.standard.removeObject(forKey: "heartCount")
         UserDefaults.standard.removeObject(forKey: "userBirthday")
-        UserDefaults.standard.removeObject(forKey: "isMember")
+        UserDefaults.standard.removeObject(forKey: "subscriptionStatus")
+        UserDefaults.standard.removeObject(forKey: "subscriptionExpiresAt")
         
         // 发送登出通知
         NotificationCenter.default.post(name: .logout, object: nil)

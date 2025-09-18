@@ -3,55 +3,95 @@ import UIKit
 
 // MARK: - 情绪数据模型
 struct EmotionData {
-    let name: String
+    let emotionType: EmotionType
     let assetName: String
     let primary: Color
     let secondary: Color
     
+    var name: String {
+        return emotionType.emotionDataName
+    }
+    
     static let emotions: [EmotionData] = [
         // 生气
         EmotionData(
-            name: "哼，气死我得了",
+            emotionType: .angry,
             assetName: "Angry",
             primary: ColorManager.Angry.primary,
             secondary: ColorManager.Angry.secondary
         ),
         // 悲伤
         EmotionData(
-            name: "唉，哭了",
+            emotionType: .sad,
             assetName: "Sad",
             primary: ColorManager.Sad.primary,
             secondary: ColorManager.Sad.secondary
         ),
         // 不开心
         EmotionData(
-            name: "今天我是不大高兴了",
+            emotionType: .unhappy,
             assetName: "Unhappy",
             primary: ColorManager.Unhappy.primary,
             secondary: ColorManager.Unhappy.secondary
         ),
         // 平和
         EmotionData(
-            name: "无风无浪的一天",
+            emotionType: .peaceful,
             assetName: "Peaceful",
             primary: ColorManager.Peaceful.primary,
             secondary: ColorManager.Peaceful.secondary
         ),
         // 开心
         EmotionData(
-            name: "今天蛮开心的",
+            emotionType: .happy,
             assetName: "Happy",
             primary: ColorManager.Happy.primary,
             secondary: ColorManager.Happy.secondary
         ),
         // 幸福
         EmotionData(
-            name: "满满的幸福",
+            emotionType: .happiness,
             assetName: "Happiness",
             primary: ColorManager.Happiness.primary,
             secondary: ColorManager.Happiness.secondary
         )
     ]
+}
+
+// MARK: - 心心显示组件
+struct HeartDisplayView: View {
+    let heartCount: Int
+    let secondaryColor: Color
+    let primaryColor: Color
+    let onPlusTap: () -> Void // 添加加号点击回调
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // 左侧白色区域 - 心心图标和数量
+            HStack(spacing: 8) {
+                Image(systemName: "star.fill")
+                    .foregroundColor(secondaryColor)
+                    .font(.system(size: 16, weight: .semibold))
+                
+                Text("\(heartCount)")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(secondaryColor)
+            }
+            .frame(width: 96, height: 36) // 固定宽度92px，高度36px
+            .background(secondaryColor.opacity(0.2))
+            .cornerRadius(12, corners: [.topLeft, .bottomLeft])
+            
+            // 右侧青色区域 - 加号按钮
+            Button(action: onPlusTap) {
+                Image(systemName: "plus")
+                    .foregroundColor(primaryColor)
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .frame(width: 36, height: 36) // 固定36x36px
+            .background(secondaryColor)
+            .cornerRadius(12, corners: [.topRight, .bottomRight])
+        }
+    }
 }
 
 // MARK: - 问候语组件
@@ -74,8 +114,6 @@ struct GreetingView: View {
     }
 }
 
-
-
 // MARK: - 情绪图标组件
 struct EmotionIconView: View {
     let emotion: EmotionData
@@ -87,7 +125,7 @@ struct EmotionIconView: View {
         Image(emotion.assetName)
             .resizable()
             .aspectRatio(contentMode: .fit)
-            .frame(width: isSelected ? 280 : 120, height: isSelected ? 280 : 120)
+            .frame(width: isSelected ? 300 : 120, height: isSelected ? 300 : 120)
             .opacity(isSelected ? (colorScheme == .dark ? 0.8 : 1.0) : 0.4)
     }
 }
@@ -155,90 +193,102 @@ struct ContentView: View {
 
     @State private var currentEmotionIndex: Int = 3 // 默认显示平和
     @State private var showHeartInsufficientToast: Bool = false // 心心数量不足的toast状态
+    @State private var inputText: String = "" // 输入框内容
+    @State private var showFloatingModal: Bool = false // 浮窗显示状态
+    @State private var heartCount: Int = 0 // 用户心心数量
+    @State private var showSubscriptionModal: Bool = false
+    @State private var showToast: Bool = false
+    @State private var toastMessage: String = "" // 订阅弹窗显示状态
+
     
     private var currentEmotion: EmotionData {
         EmotionData.emotions[currentEmotionIndex]
     }
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
+        GeometryReader { geometry in
+            ZStack {
+                VStack(spacing: 0) {
+                    // 顶部状态栏区域
+                    HStack {
+                        // 左上角心心显示
+                        VStack(alignment: .center, spacing: 4) {
+                            HeartDisplayView(
+                                heartCount: heartCount, 
+                                secondaryColor: currentEmotion.secondary, 
+                                primaryColor: currentEmotion.primary,
+                                onPlusTap: {
+                                    showSubscriptionModal = true
+                                }
+                            )
+                            
+                            // 恢复时间提示
+                            Text("每天00:00将恢复")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(currentEmotion.secondary.opacity(0.8))
+                        }
+                        .padding(.top, 28) // 调整到28px
+                        .padding(.leading, 20)
+                        
+                        Spacer()
+                    }
+                    
                 // 问候语区域
                 GreetingView(greeting: greeting, secondaryColor: currentEmotion.secondary)
-                    .padding(.top, 120) // 问候语到右上角图标间距56px（64px + 56px）
+                    .padding(.top, 48) // 调整问候语位置
 
                 // 情绪选择区域
-                VStack(spacing: 20) {
-                    // 情绪图标
-                    EmotionSelectionArea(
-                        emotions: EmotionData.emotions,
-                        currentIndex: currentEmotionIndex,
-                        onEmotionTap: { index in
-                            // 点击情绪图标不执行任何操作
-                        }
-                    )
+                VStack(spacing: 0) {
+                    // 情绪图标和文字区域
+                    VStack(spacing: 12) {
+                        // 情绪图标
+                        EmotionSelectionArea(
+                            emotions: EmotionData.emotions,
+                            currentIndex: currentEmotionIndex,
+                            onEmotionTap: { index in
+                                // 点击情绪图标不执行任何操作
+                            }
+                        )
+                        
+                        // 情绪文字
+                        Text(currentEmotion.emotionType.displayName)
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundColor(currentEmotion.secondary)
+                        //     .multilineTextAlignment(.center)
+                    }
                     
-                    // 情绪文字
-                    Text(currentEmotion.name)
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(currentEmotion.secondary)
-                        .multilineTextAlignment(.center)
+                    // 间距120px
+                    Spacer().frame(height: 120)
+                    
+                    // 输入按钮
+                    Button(action: {
+                        // 点击输入按钮显示浮窗
+                        print("🔍 点击输入按钮，显示浮窗")
+                        showFloatingModal = true
+                    }) {
+                        HStack {
+                            if inputText.isEmpty {
+                                Text("记录此刻的情绪...")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(currentEmotion.secondary)
+                            } else {
+                                Text(inputText)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(currentEmotion.secondary.opacity(0.2))
+                        .cornerRadius(42)
+                    }
+                    .padding(.horizontal, 32)
                 }
                 .padding(.top, 68) // 情绪图标和问候语间距68px
                 .frame(maxWidth: .infinity) // 确保宽度占满容器
 
                 Spacer()
                 
-                // 底部按钮区域
-                HStack(spacing: 16) {
-                    // 记录一下按钮（outline样式）
-                    Button(action: {
-                        let emotionType = convertEmotionDataToEmotionType(currentEmotion)
-                        navigationPath.append(AppRoute.journalCreate(emotion: emotionType))
-                    }) {
-                        Text("记录一下")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(currentEmotion.secondary)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(currentEmotion.secondary, lineWidth: 1.5)
-                            )
-                    }
-                    
-                    // 和我聊聊按钮（filled样式）
-                    Button(action: {
-                        // 在跳转前先检查心心数量
-                        let currentHeartCount = UserDefaults.standard.integer(forKey: "heartCount")
-                        guard currentHeartCount >= 2 else {
-                            // 心心数量不足，显示toast并拦截
-                            showHeartInsufficientToast = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                                showHeartInsufficientToast = false
-                            }
-                            print("[LOG] 和我聊聊按钮点击被拦截: 心心数量不足，当前: \(currentHeartCount)，需要: 2")
-                            return
-                        }
-                        
-                        // 心心数量足够，正常跳转
-                        let emotionType = convertEmotionDataToEmotionType(currentEmotion)
-                        let chatMessage = getEmotionChatMessage(emotionType)
-                        navigationPath.append(AppRoute.chat(emotion: emotionType, initialMessage: chatMessage))
-                    }) {
-                        Text("聊一下吧")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(currentEmotion.primary)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(currentEmotion.secondary)
-                            )
-                    }
-                }
-                .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(currentEmotion.primary)
@@ -253,13 +303,19 @@ struct ContentView: View {
                 onSecondaryColorChange?(currentEmotion.secondary)
                 // 更新用户名状态
                 currentUserName = UserDefaults.standard.string(forKey: "userName") ?? ""
+                // 初始化心心数量
+                loadHeartCount()
             }
             .onReceive(NotificationCenter.default.publisher(for: .userNameUpdated)) { _ in
                 // 监听用户名更新通知
                 currentUserName = UserDefaults.standard.string(forKey: "userName") ?? ""
             }
+            .onReceive(NotificationCenter.default.publisher(for: .heartCountUpdated)) { _ in
+                // 监听心心数量更新通知
+                heartCount = UserDefaults.standard.integer(forKey: "heartCount")
+            }
             .onChange(of: currentEmotionIndex) { _, _ in
-                // 当情绪切换时，更新颜色
+                // 当情绪切换时，更新颜色和情绪文本
                 onBackgroundColorChange?(currentEmotion.primary)
                 onSecondaryColorChange?(currentEmotion.secondary)
             }
@@ -311,12 +367,71 @@ struct ContentView: View {
             }
 
         }
+        .sheet(isPresented: $showFloatingModal) {
+            FloatingModalView(
+                currentEmotion: currentEmotion,
+                mode: .create,
+                isPresented: $showFloatingModal,
+                navigationPath: $navigationPath
+            )
+            .presentationDetents([.height(500), .large])
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled(false)
+        }
+        .sheet(isPresented: $showSubscriptionModal) {
+            SubscriptionModalView(
+                isPresented: $showSubscriptionModal,
+                onPaymentSuccess: {
+                    showToast(message: "支付成功")
+                },
+                onRestoreSuccess: {
+                    showToast(message: "恢复购买成功")
+                }
+            )
+            .presentationDetents([.height(650), .large])
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled(false)
+        }
+        .overlay(
+            // Toast 提示
+            VStack {
+                if showToast {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.white)
+                        Text(toastMessage)
+                            .foregroundColor(.white)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(8)
+                    .transition(.opacity.combined(with: .scale))
+                    .animation(.easeInOut(duration: 0.3), value: showToast)
+                }
+                Spacer()
+            }
+            .padding(.top, 20)
+        )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - 私有方法
     @State private var currentUserName: String = UserDefaults.standard.string(forKey: "userName") ?? ""
     
-
+    private func showToast(message: String) {
+        toastMessage = message
+        showToast = true
+        
+        // 2秒后自动隐藏 toast
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showToast = false
+            }
+        }
+    }
     
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -516,42 +631,40 @@ struct ContentView: View {
     }
     
     private func convertEmotionDataToEmotionType(_ emotionData: EmotionData) -> EmotionType {
-        switch emotionData.name {
-        case EmotionType.angry.emotionDataName:
-            return .angry
-        case EmotionType.sad.emotionDataName:
-            return .sad
-        case EmotionType.unhappy.emotionDataName:
-            return .unhappy
-        case EmotionType.peaceful.emotionDataName:
-            return .peaceful
-        case EmotionType.happy.emotionDataName:
-            return .happy
-        case EmotionType.happiness.emotionDataName:
-            return .happiness
-        default:
-            return .peaceful
-        }
+        return emotionData.emotionType
     }
     
     private func getEmotionChatMessage(_ emotionType: EmotionType) -> String {
-        switch emotionType {
-        case .angry:
-            return "我现在感觉到生气"
-        case .sad:
-            return "我现在感觉到悲伤"
-        case .unhappy:
-            return "我现在感觉到不开心"
-        case .peaceful:
-            return "我现在感觉到平和"
-        case .happy:
-            return "我现在感觉到开心"
-        case .happiness:
-            return "我现在感觉到幸福"
+        return emotionType.displayName
+    }
+    
+    // MARK: - 心心数量管理
+    private func loadHeartCount() {
+        // 从本地存储获取心心数量，如果没有则设置为默认值
+        if UserDefaults.standard.object(forKey: "heartCount") == nil {
+            UserDefaults.standard.set(20, forKey: "heartCount")
+            heartCount = 20
+        } else {
+            heartCount = UserDefaults.standard.integer(forKey: "heartCount")
+        }
+        
+        // 异步获取最新的心心数量
+        Task {
+            await fetchLatestHeartCount()
         }
     }
     
-
+    private func fetchLatestHeartCount() async {
+        do {
+            let latestHeartCount = try await UserHeartService.shared.fetchUserHeart()
+            await MainActor.run {
+                heartCount = latestHeartCount
+            }
+        } catch {
+            print("获取心心数量失败: \(error)")
+            // 如果获取失败，保持本地存储的值
+        }
+    }
 }
 
 // MARK: - 圆角扩展

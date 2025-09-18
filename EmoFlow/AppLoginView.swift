@@ -74,6 +74,33 @@ struct AppLoginView: View {
                     .frame(height: 50)
                     .cornerRadius(25)
                     .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)  // 添加阴影效果
+                    
+                    // 测试登录按钮 - 用于 Apple 审核测试
+                    Button(action: {
+                        testLogin()
+                    }) {
+                        HStack {
+                            Image(systemName: "person.circle.fill")
+                                .font(.system(size: 18))
+                            Text("Test Login")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color(red: 0.2, green: 0.6, blue: 1.0),
+                                    Color(red: 0.1, green: 0.4, blue: 0.8)
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(25)
+                        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+                    }
                 }
                 .padding(.horizontal, 40)
                 
@@ -295,6 +322,126 @@ struct AppLoginView: View {
                     // JSON 解析失败
                     self.errorMessage = "响应解析失败"
                     self.showError = true
+                }
+            }
+        }.resume()  // 启动网络请求
+    }
+    
+    // MARK: - 测试登录功能
+    /// 使用测试账号进行登录，专门为 Apple 审核人员提供
+    /// 使用固定的测试账号：review@test.com / Review1234!
+    private func testLogin() {
+        isLoading = true  // 显示加载状态
+        
+        // 准备测试登录数据
+        let testLoginData: [String: Any] = [
+            "username": "review@test.com",
+            "password": "Review1234!"
+        ]
+        
+        // 发送到测试登录 API
+        guard let url = URL(string: "https://emoflow.net.cn/auth/test") else {
+            isLoading = false
+            errorMessage = "无效的服务器地址"
+            showError = true
+            return
+        }
+
+        // 配置 HTTP 请求
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            // 将测试登录数据编码为 JSON 格式
+            request.httpBody = try JSONSerialization.data(withJSONObject: testLoginData)
+        } catch {
+            // JSON 编码失败
+            isLoading = false
+            errorMessage = "数据编码失败"
+            showError = true
+            return
+        }
+        
+        print("🔍 测试登录 - 开始请求测试登录接口")
+        
+        // 发起网络请求到后端验证
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                self.isLoading = false  // 隐藏加载状态
+                
+                // 检查网络错误
+                if let error = error {
+                    self.errorMessage = error.localizedDescription
+                    self.showError = true
+                    return
+                }
+                
+                // 检查响应数据
+                guard let data = data else {
+                    self.errorMessage = "服务器无响应"
+                    self.showError = true
+                    return
+                }
+                
+                do {
+                    // 解析后端返回的 JSON 数据
+                    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+                    
+                    if let status = json["status"] as? String,
+                       status == "success" {
+                        
+                        print("✅ 测试登录 - 登录成功")
+                        
+                        // 保存后端返回的用户信息到本地存储
+                        let token = json["jwt"] as? String ?? ""  // JWT token
+                        let userInfo = json["user"] as? [String: Any] ?? [:]
+                        let userEmail = userInfo["email"] as? String ?? "review@test.com"
+                        let userId = userInfo["id"] as? Int ?? 1
+                        let userName = userInfo["name"] as? String ?? "Apple Reviewer"
+                        let heart = userInfo["heart"] as? Int ?? 1000
+                        let subscriptionStatus = userInfo["subscription_status"] as? String ?? "active"
+                        let subscriptionExpiresAt = userInfo["subscription_expires_at"] as? String ?? ""
+                        
+                        // 保存到 UserDefaults
+                        UserDefaults.standard.set(token, forKey: "userToken")
+                        UserDefaults.standard.set(userName, forKey: "userName")
+                        UserDefaults.standard.set(userEmail, forKey: "userEmail")
+                        UserDefaults.standard.set(heart, forKey: "heartCount")
+                        UserDefaults.standard.set(subscriptionStatus, forKey: "subscriptionStatus")
+                        UserDefaults.standard.set(subscriptionExpiresAt, forKey: "subscriptionExpiresAt")
+                        
+                        print("🔍 测试登录 - 用户信息已保存: \(userName), 心心数量: \(heart)")
+                        
+                        // 登录成功，更新状态
+                        self.isLoggedIn = true
+                        
+                        // 同步日记列表到本地
+                        Task {
+                            await JournalListService.shared.syncJournals()
+                        }
+                        
+                        // 获取最新的用户信息（包含心心数量）
+                        Task {
+                            do {
+                                let userInfo = try await UserProfileService.shared.fetchUserProfile()
+                                print("🔍 测试登录成功后获取用户信息: \(userInfo.name), 心心数量: \(userInfo.heart)")
+                            } catch {
+                                print("⚠️ 测试登录成功后获取用户信息失败: \(error)")
+                            }
+                        }
+                    } else {
+                        // 后端验证失败
+                        let message = json["message"] as? String ?? "测试登录失败"
+                        self.errorMessage = message
+                        self.showError = true
+                        print("❌ 测试登录 - 登录失败: \(message)")
+                    }
+                } catch {
+                    // JSON 解析失败
+                    self.errorMessage = "响应解析失败"
+                    self.showError = true
+                    print("❌ 测试登录 - 解析响应失败: \(error)")
                 }
             }
         }.resume()  // 启动网络请求

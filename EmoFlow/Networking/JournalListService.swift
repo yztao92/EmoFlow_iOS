@@ -10,32 +10,28 @@ import Foundation
 // MARK: - 响应结构
 struct JournalListResponse: Codable {
     let status: String
-    let journals: [JournalData]
-    let total: Int
-    let limit: Int
-    let offset: Int
+    let data: JournalListData
 }
 
+struct JournalListData: Codable {
+    let journals: [JournalData]
+    let total: Int
+    let page: Int
+    let limit: Int
+}
+
+
 struct JournalData: Codable {
-    let id: Int
-    let title: String
-    let content: String  // 向后兼容
-    let contentHtml: String  // 新增：净化后的HTML内容
-    let contentPlain: String  // 新增：纯文本内容
-    let contentFormat: String  // 新增：内容格式
-    let isSafe: Bool  // 新增：安全标识
-    let messages: [ChatMessageDTO]
-    let session_id: String
-    let created_at: String?
-    let updated_at: String?
+    let journal_id: Int  // 后端返回的是 journal_id
+    let content: String  // 日记内容
     let emotion: String?
+    let images: [String]?  // 图片ID列表
+    let image_urls: [String]?  // 图片URL列表
+    let created_at: String?
     
     enum CodingKeys: String, CodingKey {
-        case id, title, content, messages, session_id, created_at, updated_at, emotion
-        case contentHtml = "content_html"
-        case contentPlain = "content_plain"
-        case contentFormat = "content_format"
-        case isSafe = "is_safe"
+        case journal_id, content, emotion, created_at
+        case images, image_urls
     }
 }
 
@@ -71,7 +67,6 @@ class JournalListService {
     /// 获取用户日记列表
     func fetchJournals(limit: Int = 20, offset: Int = 0) async throws -> [ChatRecord] {
         print("🔍 JournalListService - 开始获取日记列表")
-        print("   请求参数: limit=\(limit), offset=\(offset)")
         
         // 1. 构造 URLRequest
         var request = URLRequest(url: url)
@@ -81,7 +76,7 @@ class JournalListService {
         // 添加认证token
         if let token = UserDefaults.standard.string(forKey: "userToken"), !token.isEmpty {
             request.addValue(token, forHTTPHeaderField: "token")
-            print("   ✅ 已添加认证token: \(token.prefix(10))...")
+            print("   ✅ 已添加认证token")
         } else {
             print("   ❌ 未找到用户token")
             throw JournalListServiceError.unauthorized
@@ -95,7 +90,6 @@ class JournalListService {
         ]
         request.url = components.url
         
-        print("   🔗 请求URL: \(request.url?.absoluteString ?? "")")
         
         // 2. 发送网络请求
         do {
@@ -133,10 +127,10 @@ class JournalListService {
             // 4. 解析响应数据
             do {
                 let wrapper = try JSONDecoder().decode(JournalListResponse.self, from: data)
-                print("   📊 后端返回日记数量: \(wrapper.journals.count)")
+                print("   📊 后端返回日记数量: \(wrapper.data.journals.count)")
                 
                 // 5. 转换为ChatRecord格式
-                let chatRecords = wrapper.journals.compactMap { journalData -> ChatRecord? in
+                let chatRecords = wrapper.data.journals.compactMap { journalData -> ChatRecord? in
                     return convertJournalDataToChatRecord(journalData)
                 }
                 
@@ -176,12 +170,12 @@ class JournalListService {
         }
     }
     
+    
     /// 将后端JournalData转换为前端ChatRecord
     private func convertJournalDataToChatRecord(_ journalData: JournalData) -> ChatRecord? {
-        // 转换消息格式
-        let messages = journalData.messages.map { dto in
-            ChatMessage(role: dto.role == "user" ? .user : .assistant, content: dto.content)
-        }
+        // 由于后端不再返回messages字段，我们需要创建一个空的messages数组
+        // 或者通过其他方式获取对话历史
+        let messages: [ChatMessage] = []
         
         // 使用创建时间作为主要时间
         let createdDate = parseBackendTime(journalData.created_at)
@@ -189,14 +183,26 @@ class JournalListService {
         // 转换情绪类型（从后端emotion字段获取）
         let emotion = convertBackendEmotionToEmotionType(journalData.emotion)
         
+        // 使用 content 作为主要内容，memory_point 作为摘要
+        let summaryContent = journalData.content
+        
+        // 调试图片数据
+        print("🔍 JournalListService - 转换日记数据:")
+        print("   日记ID: \(journalData.journal_id)")
+        print("   图片IDs: \(journalData.images ?? [])")
+        print("   图片URLs: \(journalData.image_urls ?? [])")
+        
         let chatRecord = ChatRecord(
             id: UUID(), // 前端使用UUID，后端使用Int
-            backendId: journalData.id, // 保存后端ID
+            backendId: journalData.journal_id, // 保存后端ID
             date: createdDate, // 使用创建时间
-            messages: messages,
-            summary: journalData.contentHtml, // 使用净化后的HTML内容
+            messages: messages, // 空数组，需要通过历史记录接口获取
+            summary: summaryContent, // 使用 content 字段
             emotion: emotion,
-            title: journalData.title
+            title: nil, // 新格式中没有 title 字段
+            originalTimeString: journalData.created_at, // 保存原始时间字符串
+            images: journalData.images, // 图片ID列表
+            image_urls: journalData.image_urls // 图片URL列表
         )
         
         return chatRecord

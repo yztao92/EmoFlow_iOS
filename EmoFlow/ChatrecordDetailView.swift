@@ -90,7 +90,8 @@ struct ChatrecordDetailView: View {
                             title: record.title,
                             content: record.summary,
                             date: record.date,
-                            originalTimeString: record.originalTimeString
+                            originalTimeString: record.originalTimeString,
+                            imageURLs: record.image_urls
                         )
                         .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height - 200) // 确保有足够的最小高度
                     }
@@ -104,7 +105,8 @@ struct ChatrecordDetailView: View {
                                 title: record.title,
                                 content: record.summary,
                                 date: record.date,
-                                originalTimeString: record.originalTimeString
+                                originalTimeString: record.originalTimeString,
+                                imageURLs: record.image_urls
                             )
                             .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height - 200) // 确保有足够的最小高度
                         }

@@ -3,9 +3,11 @@ import SwiftUI
 struct ChatMessagesView: View {
     let messages: [ChatMessage]
     let isLoading: Bool
+    let isLoadingLongTime: Bool
     let userBubbleColor: Color
     let userEmojiImageName: String
     let aiAvatarImageName: String
+    let onImageTap: (UIImage) -> Void
 
     var body: some View {
         LazyVStack(spacing: 16) {
@@ -24,11 +26,31 @@ struct ChatMessagesView: View {
                         Spacer()
                     } else {
                         Spacer()
-                        TextBubbleView(
-                            text: msg.content,
-                            color: ColorManager.inputFieldColor,
-                            alignment: .trailing
-                        )
+                        VStack(alignment: .trailing, spacing: 8) {
+                            // 显示图片（如果有）
+                            if let imageData = msg.imageData, let uiImage = UIImage(data: imageData) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: 200, maxHeight: 200)
+                                    .cornerRadius(12)
+                                    .onTapGesture {
+                                        print("🔍 点击图片消息")
+                                        print("🔍 图片数据大小: \(imageData.count) bytes")
+                                        print("🔍 图片尺寸: \(uiImage.size)")
+                                        onImageTap(uiImage)
+                                    }
+                            }
+                            
+                            // 显示文本内容（如果有）
+                            if !msg.content.isEmpty {
+                                TextBubbleView(
+                                    text: msg.content,
+                                    color: ColorManager.inputFieldColor,
+                                    alignment: .trailing
+                                )
+                            }
+                        }
                         Image(userEmojiImageName)
                             .resizable()
                             .frame(width: 36, height: 36)
@@ -44,7 +66,7 @@ struct ChatMessagesView: View {
                         .frame(width: 36, height: 36)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     TextBubbleView(
-                        text: "",
+                        text: isLoadingLongTime ? "互联网检索中..." : "",
                         color: Color.gray.opacity(0.18),
                         alignment: .leading,
                         isLoading: true
@@ -73,6 +95,7 @@ struct TextBubbleView: View {
                     .progressViewStyle(.circular)
             }
             Text(text)
+                .textSelection(.enabled) // 启用文本选择
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
